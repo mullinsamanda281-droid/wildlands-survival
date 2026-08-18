@@ -408,19 +408,20 @@ createResources(20, 'metal');
 createBerryBushes();
 
 // Water pond - drink to restore thirst
+const pondY = getTerrainHeight(60, -60);
 const pond = new THREE.Mesh(
   new THREE.CircleGeometry(15, 24),
   new THREE.MeshStandardMaterial({ color: '#1a5276', flatShading: true, transparent: true, opacity: 0.7 })
 );
 pond.rotation.x = -Math.PI / 2;
-pond.position.set(60, 0.3, -60);
+pond.position.set(60, pondY + 0.3, -60);
 scene.add(pond);
 const pondRim = new THREE.Mesh(
   new THREE.TorusGeometry(15, 0.8, 6, 24),
   new THREE.MeshStandardMaterial({ color: '#5d6d7e', flatShading: true })
 );
 pondRim.rotation.x = -Math.PI / 2;
-pondRim.position.set(60, 0.1, -60);
+pondRim.position.set(60, pondY + 0.1, -60);
 scene.add(pondRim);
 
 const waterPos = { x: 60, z: -60, radius: 15 };
