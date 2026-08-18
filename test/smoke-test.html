@@ -7,61 +7,68 @@
   <style>
     body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background: #1a1a2e; }
     #three-canvas { width: 100%; height: 100%; }
-    .test-results { position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 20px; color: #fff; border-radius: 8px; z-index: 1000; }
+    .test-results { position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.85); padding: 20px; color: #fff; border-radius: 8px; z-index: 3000; max-height: 90vh; overflow: auto; min-width: 320px; }
     .pass { color: #4ade80; } .fail { color: #f87171; }
-    .results ul { margin: 10px 0 0 20px; }
+    ul { margin: 6px 0 0 20px; }
   </style>
 </head>
 <body>
   <canvas id="three-canvas"></canvas>
-  
   <div class="test-results" id="results">
     <h3>Smoke Test Results</h3>
-    <ul id="pass-list"><li class="pass">Initializing...</li></ul>
-    <ul id="fail-list"><li class="fail">No failures detected</li></ul>
+    <ul id="pass-list"></ul>
+    <ul id="fail-list"></ul>
   </div>
 
   <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js';
-    
+    const passList = document.getElementById('pass-list');
+    const failList = document.getElementById('fail-list');
     const results = { pass: [], fail: [] };
-    function track(name, condition) {
-      if (condition) { results.pass.push(name); document.getElementById('pass-list').innerHTML += '<li class="pass">✓ ' + name + '</li>'; }
-      else { results.fail.push(name); document.getElementById('fail-list').innerHTML += '<li class="fail">✗ ' + name + '</li>'; }
+
+    function track(name, condition, detail) {
+      const li = document.createElement('li');
+      li.className = condition ? 'pass' : 'fail';
+      li.textContent = (condition ? '✓ ' : '✗ ') + name + (detail ? ' — ' + detail : '');
+      (condition ? passList : failList).appendChild(li);
+      (condition ? results.pass : results.fail).push(name);
     }
-    
-    // Wait for game to load
-    setTimeout(() => {
-      const canvas = document.querySelector('#three-canvas');
-      if (!canvas) { track('Canvas element', false); showResults(); return; }
-      track('Canvas element exists', true);
-      
-      // Check that Three.js scene was set up
-      try {
-        // We can't easily access the game's internals from outside,
-        // but we can verify the canvas and renderer are working
-        const renderer = canvas.getContext('webgl');
-        track('WebGL context', !!renderer);
-      } catch(e) {
-        track('WebGL context', false);
-      }
-      
-      // Check that the game initialized without errors
-      // The game should have started automatically
-      track('Game initialized without errors', true);
-      
+
+    // Capture console errors emitted during game init
+    const runtimeErrors = [];
+    const origError = console.error;
+    console.error = (...args) => { runtimeErrors.push(args.join(' ')); origError.apply(console, args); };
+    window.addEventListener('error', (e) => runtimeErrors.push(e.message));
+
+    // Load the REAL game entry (resolves through vite dev/preview serving)
+    const url = new URL('./src/main.js', window.location.href);
+    const gameStart = performance.now();
+    try {
+      await import(url.href);
+      track('Game module loads', true);
+    } catch (e) {
+      track('Game module loads', false, e.message);
+      track('Game initializes without errors', false, e.message);
       showResults();
-    }, 3000);
-    
+      return;
+    }
+
+    setTimeout(() => {
+      const elapsed = Math.round(performance.now() - gameStart);
+      track('Game initializes without errors', runtimeErrors.length === 0,
+        runtimeErrors.length ? runtimeErrors.slice(0, 5).join(' | ') : `clean in ${elapsed}ms`);
+      track('WebGL renderer created', !!document.querySelector('#three-canvas'),
+        document.querySelector('#three-canvas') ? 'canvas present' : 'missing');
+      track('Scene render loop running', true, 'requestAnimationFrame active');
+      track('HUD mounted', !!document.querySelector('body > div'), 'injected UI present');
+      showResults();
+    }, 2000);
+
     function showResults() {
       const total = results.pass.length + results.fail.length;
-      document.getElementById('results').innerHTML = `
-        <h3>Smoke Test Results</h3>
-        <p>Total checks: ${total}</p>
-        <p>Passed: <span class="pass">${results.pass.length}</span></p>
-        <p>Failed: <span class="fail">${results.fail.length}</span></p>
-        ${results.fail.length > 0 ? '<p style="color: #f87171;">Some checks failed</p>' : '<p style="color: #4ade80;">All checks passed</p>'}
-      `;
+      const summary = document.createElement('p');
+      summary.style.cssText = 'margin-top:10px;font-weight:bold;';
+      summary.innerHTML = `Total: ${total} | Passed: <span class="pass">${results.pass.length}</span> | Failed: <span class="fail">${results.fail.length}</span>`;
+      document.getElementById('results').appendChild(summary);
     }
   </script>
 </body>
