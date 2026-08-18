@@ -12,13 +12,15 @@ const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
 directionalLight.position.set(50, 100, 50);
-directionalLight.castShadow = true;
+directionalLight.castShadow = qualitySetting !== "low";
 scene.add(directionalLight);
 const sun = new THREE.Object3D();
 sun.position.set(50, 50, 50);
 scene.add(sun);
 const fog = new THREE.Fog(0x87ceeb, 10, 200);
 scene.fog = fog;
+const qualitySetting = 'medium'; // low / medium / high
+directionalLight.castShadow = qualitySetting !== 'low';
 const skyColor = new THREE.Color(0x87ceeb);
 
 window.addEventListener('resize', () => {
@@ -196,6 +198,13 @@ let isSprinting = false;
 let canJump = true;
 const gravity = -0.02;
 let playerY = 1.6;
+let hunger = 100;
+let thirst = 100;
+let stamina = 100;
+const HUNGER_DEPLETION_RATE = 0.01; // per second
+const THIRST_DEPLETION_RATE = 0.015; // per second
+const STAMINA_DEPLETION_RATE = 0.005; // per second, increases when sprinting
+const HUNGER_DEATH_THRESHOLD = 0;
 
 document.addEventListener('keydown', (event) => {
   switch (event.code) {
@@ -295,9 +304,68 @@ function createResources(count, type) {
     });
   }
 }
+
+function createBerryBushes() {
+  for (let i = 0; i < 25; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 30 + Math.random() * 120;
+    const x = Math.cos(angle) * distance;
+    const z = Math.sin(angle) * distance;
+    const bush = new THREE.Mesh(
+      new THREE.SphereGeometry(2, 8, 8),
+      new THREE.MeshStandardMaterial({ color: '#4d7c2e', flatShading: true })
+    );
+    bush.position.set(x, 2, z);
+    bush.castShadow = true;
+    scene.add(bush);
+    const berries = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 6, 6),
+      new THREE.MeshBasicMaterial({ color: '#c0392b' })
+    );
+    berries.position.set(x + 1, 3, z);
+    scene.add(berries);
+    resources.push({
+      id: `berry_${i}`, type: 'berries', maxAmount: 5, currentAmount: 5,
+      position: { x, z }, node: bush, gathered: false
+    });
+  }
+}
+
 createResources(50, 'wood');
 createResources(30, 'stone');
 createResources(20, 'metal');
+createBerryBushes();
+
+// Water pond - drink to restore thirst
+const pond = new THREE.Mesh(
+  new THREE.CircleGeometry(15, 24),
+  new THREE.MeshStandardMaterial({ color: '#1a5276', flatShading: true, transparent: true, opacity: 0.7 })
+);
+pond.rotation.x = -Math.PI / 2;
+pond.position.set(60, 0.3, -60);
+scene.add(pond);
+const pondRim = new THREE.Mesh(
+  new THREE.TorusGeometry(15, 0.8, 6, 24),
+  new THREE.MeshStandardMaterial({ color: '#5d6d7e', flatShading: true })
+);
+pondRim.rotation.x = -Math.PI / 2;
+pondRim.position.set(60, 0.1, -60);
+scene.add(pondRim);
+
+const waterPos = { x: 60, z: -60, radius: 15 };
+
+function drinkWater() {
+  const dx = camera.position.x - waterPos.x;
+  const dz = camera.position.z - waterPos.z;
+  if (Math.sqrt(dx * dx + dz * dz) < waterPos.radius + 2) {
+    playerStats.thirst = Math.min(100, playerStats.thirst + 40);
+    updateStatsUI();
+    console.log('Drank water');
+    return true;
+  }
+  console.log('No water nearby');
+  return false;
+}
 
 let canGather = true;
 let lastGatherTime = 0;
@@ -328,6 +396,7 @@ function gatherResource() {
       addToInventory(r.type, 1);
       flashMesh(r.node);
       lastGatherTime = now;
+      useToolForGather(r.type);
       if (r.currentAmount <= 0) {
         r.gathered = true;
         setTimeout(() => {
@@ -360,7 +429,9 @@ function updateInventoryUI() {
   slots.forEach(slot => { slot.innerHTML = ''; });
   inventory.forEach((item, i) => {
     if (slots[i]) {
-      slots[i].innerHTML = `<span style="color:${ITEM_COLORS[item.type] || '#fff'};font-weight:bold;">${item.type} x${item.count}</span>`;
+      const toolInfo = item.type === equippedTool && TOOL_DEFS[item.type]
+        ? ` <span style="color:#e8c54a;font-size:10px;">(${item.durability ?? TOOL_DEFS[item.type].durability})</span>` : '';
+      slots[i].innerHTML = `<span style="color:${ITEM_COLORS[item.type] || '#fff'};font-weight:bold;">${item.type}${toolInfo}</span>`;
     }
   });
 }
@@ -372,6 +443,171 @@ function toggleInventory() {
 function closeInventory() {
   if (inventoryPanel) inventoryPanel.style.display = 'none';
 }
+
+// ----- TOOLS & EQUIPMENT -----
+let equippedTool = null;
+const TOOL_DEFS = {
+  stone_axe: { type: 'wood', damage: 2, durability: 40, color: '#8b5a2b', name: 'Stone Axe' },
+  stone_pickaxe: { type: 'stone', damage: 2, durability: 40, color: '#6b7b8d', name: 'Stone Pickaxe' },
+  spear: { type: 'metal', damage: 12, durability: 30, color: '#c0c0c0', name: 'Spear' }
+};
+
+function equipTool(id) {
+  const has = inventory.some(i => i.type === id);
+  if (!has) { console.log(`No ${TOOL_DEFS[id]?.name || id} to equip`); return; }
+  equippedTool = equippedTool === id ? null : id;
+  console.log(equippedTool ? `Equipped ${TOOL_DEFS[id].name}` : 'Unequipped tool');
+}
+
+function useToolForGather(gatheredType) {
+  if (!equippedTool || !TOOL_DEFS[equippedTool]) return;
+  const tool = TOOL_DEFS[equippedTool];
+  if (tool.type === gatheredType) {
+    for (let i = 0; i < tool.damage - 1; i++) addToInventory(gatheredType, 1);
+  }
+  const slot = inventory.find(i => i.type === equippedTool);
+  if (slot) {
+    slot.count = (slot.count || 0) + 1; // treat as durability when stacked? No - use dedicated field
+  }
+  damageEquippedTool();
+}
+
+function damageEquippedTool() {
+  if (!equippedTool) return;
+  const slot = inventory.find(i => i.type === equippedTool);
+  if (!slot) return;
+  if (slot.durability === undefined) slot.durability = TOOL_DEFS[equippedTool].durability;
+  slot.durability -= 1;
+  if (slot.durability <= 0) {
+    inventory = inventory.filter(i => i !== slot);
+    equippedTool = null;
+    console.log('Tool broke!');
+  }
+  updateInventoryUI();
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.code === 'Key4') equipTool('stone_axe');
+  if (event.code === 'Key5') equipTool('stone_pickaxe');
+  if (event.code === 'Key6') equipTool('spear');
+});
+
+// ----- CRAFTING -----
+const recipes = {
+  plank: { name: 'Plank', cost: { wood: 2 }, color: '#d2a679' },
+  stone_block: { name: 'Stone Block', cost: { stone: 2 }, color: '#b87333' },
+  metal_bar: { name: 'Metal Bar', cost: { metal: 2 }, color: '#c0c0c0' },
+  stone_axe: { name: 'Stone Axe', cost: { wood: 3, stone: 3 }, color: '#8b5a2b' },
+  stone_pickaxe: { name: 'Stone Pickaxe', cost: { wood: 3, stone: 4 }, color: '#6b7b8d' },
+  spear: { name: 'Spear', cost: { wood: 3, metal: 1 }, color: '#c0c0c0' },
+  arrow: { name: 'Arrow', cost: { wood: 1, stone: 1 }, color: '#d2a679' },
+  campfire: { name: 'Campfire', cost: { wood: 3 }, color: '#e67e22' },
+  bandage: { name: 'Bandage', cost: { wood: 1 }, color: '#f5f5f5' }
+};
+
+const CAMPFIRES = [];
+const campfireMeshes = [];
+
+function buildCampfire() {
+  if (!craft('campfire')) return;
+  const fire = new THREE.Group();
+  const logs = new THREE.Mesh(
+    new THREE.CylinderGeometry(1, 1.2, 0.8, 8),
+    new THREE.MeshStandardMaterial({ color: '#6b4423', flatShading: true })
+  );
+  logs.position.y = 0.4;
+  fire.add(logs);
+  const flame = new THREE.Mesh(
+    new THREE.SphereGeometry(0.7, 8, 8),
+    new THREE.MeshStandardMaterial({ color: '#e67e22', flatShading: true, emissive: '#ff4500', emissiveIntensity: 0.8 })
+  );
+  flame.position.y = 1.2;
+  fire.add(flame);
+  fire.position.set(camera.position.x, getTerrainHeight(camera.position.x, camera.position.z), camera.position.z);
+  scene.add(fire);
+  CAMPFIRES.push({ mesh: fire, x: fire.position.x, z: fire.position.z });
+  campfireMeshes.push(fire);
+  console.log('Campfire placed');
+}
+
+function cookAtCampfire() {
+  let nearest = null, minDist = Infinity;
+  for (const c of CAMPFIRES) {
+    const d = Math.sqrt((c.x - camera.position.x) ** 2 + (c.z - camera.position.z) ** 2);
+    if (d < minDist) { minDist = d; nearest = c; }
+  }
+  if (!nearest || minDist > 8) {
+    console.log('No campfire nearby');
+    return false;
+  }
+  if (removeFromInventory('wood', 2) === 0) {
+    console.log('Need 2 wood to cook');
+    return false;
+  }
+  addToInventory('cooked_meat', 1);
+  console.log('Cooked meat over the fire');
+  return true;
+}
+
+function removeFromInventory(type, count) {
+  for (const item of inventory) {
+    if (item.type === type) {
+      const removed = Math.min(item.count, count);
+      item.count -= removed;
+      if (item.count <= 0) inventory = inventory.filter(i => i !== item);
+      return removed;
+    }
+  }
+  return 0;
+}
+
+function craft(itemId) {
+  const recipe = recipes[itemId];
+  if (!recipe) return false;
+  for (const [type, cost] of Object.entries(recipe.cost)) {
+    const total = inventory.filter(i => i.type === type).reduce((s, i) => s + i.count, 0);
+    if (total < cost) {
+      console.log(`Not enough ${type} for ${recipe.name}`);
+      return false;
+    }
+  }
+  for (const [type, cost] of Object.entries(recipe.cost)) {
+    let remaining = cost;
+    while (remaining > 0) {
+      const removed = removeFromInventory(type, remaining);
+      if (removed === 0) break;
+      remaining -= removed;
+    }
+  }
+  addToInventory(itemId, 1);
+  console.log(`Crafted ${recipe.name}`);
+  return true;
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.code === 'KeyC') {
+    event.preventDefault();
+    craftPanel.style.display = craftPanel.style.display === 'none' ? 'block' : 'none';
+    renderCrafting();
+  }
+});
+
+const craftPanel = document.createElement('div');
+craftPanel.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#2a2a3a;padding:20px;border-radius:8px;color:#fff;z-index:1100;display:none;font-family:Arial,sans-serif;min-width:260px;';
+document.body.appendChild(craftPanel);
+
+function renderCrafting() {
+  craftPanel.innerHTML = '<div style="font-size:18px;font-weight:bold;margin-bottom:12px;">CRAFTING <span style="font-size:11px;opacity:0.6;">[C] close</span></div>';
+  for (const [id, recipe] of Object.entries(recipes)) {
+    const costText = Object.entries(recipe.cost).map(([t, c]) => `${t} x${c}`).join(', ');
+    craftPanel.innerHTML += `<div style="padding:6px 0;border-bottom:1px solid #444;cursor:pointer;" onclick="craftItem('${id}')">
+      <span style="color:${recipe.color};font-weight:bold;">${recipe.name}</span>
+      <span style="float:right;font-size:12px;opacity:0.8;">${costText}</span>
+    </div>`;
+  }
+}
+window.craftItem = craft;
+renderCrafting();
 
 let attackCooldown = 0;
 const attackSpeed = 0.5;
@@ -433,45 +669,30 @@ function attack(button, damage, range, color) {
   attackCooldown = button === 'Melee' ? attackSpeed : attackSpeed * 2;
 }
 
-function meleeAttack() { attack('Melee', meleeDamage, 5, '#ff4444'); }
-function bowShot() { attack('Bow', bowDamage, bowRange, '#5dade2'); }
+function meleeAttack() {
+  const damage = equippedTool === 'spear' ? TOOL_DEFS.spear.damage : meleeDamage;
+  attack('Melee', damage, 5, '#ff4444');
+  if (equippedTool === 'spear') damageEquippedTool();
+}
+function bowShot() {
+  if (removeFromInventory('arrow', 1) === 0) {
+    console.log('No arrows! Craft some with [C]');
+    return;
+  }
+  attack('Bow', bowDamage, bowRange, '#5dade2');
+}
 
 const wildlife = [];
 function createWildlife(x, z, type) {
-  const sizes = { deer: 4, boar: 6, wolf: 5 };
-  const speeds = { deer: 1.5, boar: 1.0, wolf: 2.0 };
-  const colors = { deer: '#6b4c4c', boar: '#8b4513', wolf: '#2c5f2d' };
+  const sizes = { deer: 4, boar: 6, wolf: 5, chicken: 1.5, bear: 8 };
+  const speeds = { deer: 1.5, boar: 1.0, wolf: 2.0, chicken: 2.5, bear: 0.8 };
+  const colors = { deer: '#6b4c4c', boar: '#8b4513', wolf: '#2c5f2d', chicken: '#f4e0c5', bear: '#5b3a1e' };
+  const healths = { deer: 3, boar: 4, wolf: 3, chicken: 1, bear: 8 };
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(sizes[type], 12, 12),
     new THREE.MeshStandardMaterial({ color: colors[type], flatShading: true })
   );
   mesh.position.set(x, sizes[type], z);
-  mesh.castShadow = true;
-  scene.add(mesh);
-  const entity = {
-    mesh, type, x, z,
-    health: 3, maxHealth: 3, speed: speeds[type],
-    state: 'wandering', timer: 0, wanderRadius: 30
-  };
-  wildlife.push(entity);
-  return entity;
-}
-createWildlife(100, 100, 'deer');
-createWildlife(-80, 150, 'boar');
-createWildlife(200, -100, 'wolf');
-
-function removeWildlife(w) {
-  const idx = wildlife.indexOf(w);
-  if (idx > -1) {
-    scene.remove(w.mesh);
-    wildlife.splice(idx, 1);
-    setTimeout(() => createWildlife(100 + Math.random() * 200, 100 + Math.random() * 200, w.type), 15000);
-  }
-}
-
-function updateWildlifeAI(deltaTime) {
-  if (!pointerLocked) return;
-  const px = camera.position.x, pz = camera.position.z;
   wildlife.forEach(w => {
     const dx = w.x - px, dz = w.z - pz;
     const distance = Math.sqrt(dx * dx + dz * dz);
@@ -497,31 +718,190 @@ function updateWildlifeAI(deltaTime) {
     w.x += Math.max(-step, Math.min(step, tx - w.x));
     w.z += Math.max(-step, Math.min(step, tz - w.z));
     w.mesh.position.set(w.x, getTerrainHeight(w.x, w.z) + 3, w.z);
+
+    // Attack player on contact (wolves/boars aggressive)
+    const aggressive = w.type === 'wolf' || w.type === 'boar';
+    const packAttackRange = 10;
+    
+    // Wolf pack behavior: count nearby wolves and coordinate attacks
+    if (aggressive && distance < packAttackRange && playerStats.health > 0) {
+      // Count wolves in pack
+      const packWolves = wildlife.filter(w2 => w2.type === 'wolf' && w2 !== w && 
+        Math.sqrt(Math.pow(w2.x - px, 2) + Math.pow(w2.z - pz, 2)) < packAttackRange);
+      const packSize = packWolves.length + 1; // +1 for current wolf
+      
+      // Pack attack: all wolves attack together when pack size >= 2
+      if (packSize >= 2) {
+        // Pack attack timer - each wolf attacks independently but simultaneously
+        if (!w.packAttackTimer || (gameTime - w.packAttackTimer) > 2) {
+          w.packAttackTimer = gameTime;
+          // Deal damage based on pack size (more wolves = more damage)
+          const packDamage = 8 * Math.min(packSize, 3);
+          takeDamage(packDamage);
+          showDamageNumber(window.innerWidth / 2, window.innerHeight / 2, packDamage, '#ff4444');
+        }
+      } else {
+        // Single wolf attack (original behavior)
+        if (!w.attackTimer || (gameTime - w.attackTimer) > 1.5) {
+          w.attackTimer = gameTime;
+          takeDamage(8);
+          showDamageNumber(window.innerWidth / 2, window.innerHeight / 2, 8, '#ff4444');
+        }
+      }
+    }
+createWildlife(-80, 150, 'boar');
+createWildlife(200, -100, 'wolf');
+createWildlife(20, 40, 'chicken');
+createWildlife(-30, 60, 'chicken');
+createWildlife(40, -20, 'chicken');
+createWildlife(0, -150, 'bear');
+createWildlife(-200, 30, 'bear');
+
+function removeWildlife(w) {
+  const idx = wildlife.indexOf(w);
+  if (idx > -1) {
+    scene.remove(w.mesh);
+    wildlife.splice(idx, 1);
+    const loot = {
+      deer: { wood: 2, meat: 2 }, boar: { metal: 1, meat: 2 },
+      wolf: { metal: 2, meat: 1 }, chicken: { meat: 1 },
+      bear: { metal: 3, meat: 3 }
+    }[w.type] || { wood: 1 };
+    for (const [type, count] of Object.entries(loot)) addToInventory(type, count);
+    console.log(`Looted ${w.type}: ${JSON.stringify(loot)}`);
+    setTimeout(() => createWildlife(100 + Math.random() * 200, 100 + Math.random() * 200, w.type), 15000);
+  }
+}
+
+function updateWildlifeAI(deltaTime) {
+  if (!pointerLocked) return;
+  const px = camera.position.x, pz = camera.position.z;
+  wildlife.forEach(w => {
+    const dx = w.x - px, dz = w.z - pz;
+    const distance = Math.sqrt(dx * dx + dz * dz);
+    let tx = w.x, tz = w.z;
+    const passive = w.type === 'deer' || w.type === 'chicken';
+    const aggressive = w.type === 'wolf' || w.type === 'boar' || w.type === 'bear';
+    if (distance < (passive ? 30 : aggressive ? 60 : 30)) {
+      if (passive) {
+        w.state = 'fleeing';
+        tx = w.x + (dx / (distance + 0.001)) * 20;
+        tz = w.z + (dz / (distance + 0.001)) * 20;
+      } else {
+        w.state = 'chasing';
+        tx = px; tz = pz;
+      }
+    } else if (distance < 100) {
+      if (!passive) { w.state = 'chasing'; tx = px; tz = pz; }
+      else { w.state = 'wandering'; }
+    } else {
+      w.state = 'wandering';
+      w.timer += deltaTime;
+      if (w.timer > 2) {
+        w.timer = 0;
+        const angle = Math.random() * Math.PI * 2;
+        tx = w.x + Math.cos(angle) * w.wanderRadius;
+        tz = w.z + Math.sin(angle) * w.wanderRadius;
+      }
+    }
+    const step = w.speed * deltaTime;
+    w.x += Math.max(-step, Math.min(step, tx - w.x));
+    w.z += Math.max(-step, Math.min(step, tz - w.z));
+    w.mesh.position.set(w.x, getTerrainHeight(w.x, w.z) + 3, w.z);
+
+    // Attack player on contact (aggressive: wolf/boar/bear)
+    const atkDamage = w.type === 'bear' ? 15 : 8;
+    if (aggressive && distance < 5 && playerStats.health > 0) {
+      if (!w.attackTimer || (gameTime - w.attackTimer) > 1.5) {
+        w.attackTimer = gameTime;
+        takeDamage(atkDamage);
+        showDamageNumber(window.innerWidth / 2, window.innerHeight / 2, atkDamage, '#ff4444');
+      }
+    }
     if (distance > 200) {
       w.x = 100 + Math.random() * 200;
       w.z = 100 + Math.random() * 200;
     }
+    const limit = terrainSize / 2 - 20;
+    w.x = Math.max(-limit, Math.min(limit, w.x));
+    w.z = Math.max(-limit, Math.min(limit, w.z));
   });
 }
 
 let selectedBuilding = null;
 const buildingTypes = {
-  foundation: { size: 20, color: '#8b5a2b' },
-  wall: { size: 2, color: '#7a5230' },
-  floor: { size: 20, color: '#9b7a4a' }
+  foundation: { size: 20, color: '#8b5a2b', cost: { wood: 5 }, tier: 1 },
+  wall: { size: 2, color: '#7a5230', cost: { wood: 3 }, tier: 1 },
+  floor: { size: 20, color: '#9b7a4a', cost: { wood: 10 }, tier: 1 }
 };
+const BUILDING_TIERS = [
+  { name: 'wood', color: '#8b5a2b' },
+  { name: 'stone', color: '#b0b0b0', cost: { stone: 3 } },
+  { name: 'metal', color: '#5dade2', cost: { metal: 2 } }
+];
 
 function placeBuilding() {
   if (!selectedBuilding || attackCooldown > 0) return;
   const def = buildingTypes[selectedBuilding];
+  const tier = Math.min(2, (def.tier || 0) + 0);
+  const mat = BUILDING_TIERS[tier];
+  for (const [type, cost] of Object.entries(def.cost)) {
+    const total = inventory.filter(i => i.type === type).reduce((s, i) => s + i.count, 0);
+    if (total < cost) {
+      console.log(`Not enough ${type} for ${selectedBuilding}`);
+      return;
+    }
+  }
+  for (const [type, cost] of Object.entries(def.cost)) {
+    let remaining = cost;
+    while (remaining > 0) {
+      const removed = removeFromInventory(type, remaining);
+      if (removed === 0) break;
+      remaining -= removed;
+    }
+  }
   const building = new THREE.Mesh(
     new THREE.BoxGeometry(def.size, 2, def.size),
-    new THREE.MeshStandardMaterial({ color: def.color, flatShading: true })
+    new THREE.MeshStandardMaterial({ color: mat.color, flatShading: true })
   );
   building.position.set(camera.position.x, 1, camera.position.z);
   building.castShadow = true;
+  building.userData.tier = tier;
+  building.userData.type = selectedBuilding;
   scene.add(building);
-  console.log(`Placed ${selectedBuilding}`);
+  placedBuildings.push(building);
+  console.log(`Placed ${selectedBuilding} (${BUILDING_TIERS[tier].name})`);
+}
+
+const placedBuildings = [];
+
+function upgradeFacingBuilding() {
+  const raycaster = new THREE.Raycaster();
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  raycaster.set(camera.position, dir);
+  raycaster.far = 8;
+  const hits = raycaster.intersectObjects(placedBuildings, false);
+  if (hits.length === 0) { console.log('No building to upgrade'); return; }
+  const b = hits[0].object;
+  const tier = b.userData.tier;
+  if (tier >= BUILDING_TIERS.length - 1) { console.log('Already max tier'); return; }
+  const next = BUILDING_TIERS[tier + 1];
+  for (const [type, cost] of Object.entries(next.cost)) {
+    const total = inventory.filter(i => i.type === type).reduce((s, i) => s + i.count, 0);
+    if (total < cost) { console.log(`Not enough ${type} to upgrade`); return; }
+  }
+  for (const [type, cost] of Object.entries(next.cost)) {
+    let remaining = cost;
+    while (remaining > 0) {
+      const removed = removeFromInventory(type, remaining);
+      if (removed === 0) break;
+      remaining -= removed;
+    }
+  }
+  b.userData.tier = tier + 1;
+  b.material.color.set(BUILDING_TIERS[tier + 1].color);
+  console.log(`Upgraded building to ${BUILDING_TIERS[tier + 1].name}`);
 }
 
 const SAVE_VERSION = 1;
@@ -532,6 +912,7 @@ function saveGame() {
     rotation: { x: rotation.x, y: rotation.y },
     inventory: inventory.map(i => ({ ...i })),
     timeOfDay: gameTime,
+    stats: { ...playerStats },
     resources: resources.map(r => ({ id: r.id, type: r.type, currentAmount: r.currentAmount, maxAmount: r.maxAmount }))
   };
   localStorage.setItem('wildlands_save', JSON.stringify(gameState));
@@ -555,6 +936,13 @@ function loadGame() {
   if (gameState.inventory) {
     inventory = gameState.inventory.filter(i => i && i.type);
     updateInventoryUI();
+  }
+  if (gameState.stats) {
+    playerStats.health = gameState.stats.health ?? 100;
+    playerStats.hunger = gameState.stats.hunger ?? 100;
+    playerStats.thirst = gameState.stats.thirst ?? 100;
+    playerStats.stamina = gameState.stats.stamina ?? 100;
+    updateStatsUI();
   }
   if (gameState.resources) {
     for (const r of resources) {
@@ -589,12 +977,81 @@ const fpsCounter = document.createElement('div');
 fpsCounter.style.cssText = 'position:absolute;top:10px;right:10px;color:#0f0;font-family:monospace;font-size:12px;display:none;z-index:1002;';
 hud.appendChild(fpsCounter);
 
+const toolBar = document.createElement('div');
+toolBar.style.cssText = 'position:absolute;bottom:110px;left:50%;transform:translateX(-50%);color:#e8c54a;font-family:monospace;font-size:14px;text-shadow:1px 1px 2px #000;display:none;z-index:1002;';
+hud.appendChild(toolBar);
+
 let gameTime = 0;
 let lastFrameTime = performance.now();
 let fpsFrames = 0;
 let fpsTime = 0;
 let footstepAccum = 0;
 let fpsVisible = false;
+
+// Player stats
+const playerStats = { health: 100, hunger: 100, thirst: 100, stamina: 100 };
+const FOOD_ITEMS = { plank: 0, stone_block: 0, metal_bar: 0, stone_axe: 0, wood: 0, stone: 0, metal: 0, berries: 20, meat: 15, cooked_meat: 40 };
+
+function takeDamage(amount) {
+  playerStats.health = Math.max(0, playerStats.health - amount);
+  updateStatsUI();
+  if (playerStats.health <= 0) showDeathScreen();
+}
+
+function eatFood(type) {
+  const value = FOOD_ITEMS[type];
+  if (!value) return false;
+  if (removeFromInventory(type, 1) === 0) return false;
+  if (type === 'berries') playerStats.hunger = Math.min(100, playerStats.hunger + value);
+  else playerStats.hunger = Math.min(100, playerStats.hunger + value);
+  updateStatsUI();
+  return true;
+}
+
+function updateStatsUI() {
+  const hBar = document.getElementById('hunger-bar');
+  const tBar = document.getElementById('thirst-bar');
+  const hpBar = document.getElementById('health-bar');
+  if (hBar) hBar.style.width = playerStats.hunger + '%';
+  if (tBar) tBar.style.width = playerStats.thirst + '%';
+  if (hpBar) hpBar.style.width = playerStats.health + '%';
+}
+
+function showDeathScreen() {
+  if (document.getElementById('death-screen')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'death-screen';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#ff4444;font-family:Arial,sans-serif;z-index:2000;';
+  overlay.innerHTML = '<div style="font-size:48px;font-weight:bold;margin-bottom:20px;">YOU DIED</div>' +
+    '<button onclick="newGame();document.getElementById(\'death-screen\').remove();document.exitPointerLock();" style="padding:12px 32px;font-size:18px;background:#555;color:#fff;border:none;border-radius:6px;cursor:pointer;">New Game</button>';
+  document.body.appendChild(overlay);
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.code === 'KeyR' && pointerLocked) {
+    if (eatFood('berries')) console.log('Ate berries');
+    else console.log('No berries');
+  }
+  if (event.code === 'KeyF' && pointerLocked) {
+    if (eatFood('cooked_meat')) console.log('Ate cooked meat');
+    else if (eatFood('meat')) console.log('Ate raw meat');
+    else console.log('No meat');
+  }
+  if (event.code === 'KeyQ' && pointerLocked) drinkWater();
+  if (event.code === 'KeyG' && pointerLocked) buildCampfire();
+  if (event.code === 'KeyT' && pointerLocked) cookAtCampfire();
+  if (event.code === 'KeyV' && pointerLocked) useBandage();
+  if (event.code === 'KeyU' && pointerLocked) upgradeFacingBuilding();
+});
+
+function useBandage() {
+  if (removeFromInventory('bandage', 1) === 0) { console.log('No bandages! Craft with [C]'); return; }
+  playerStats.health = Math.min(100, playerStats.health + 30);
+  updateStatsUI();
+  console.log('Bandage used (+30 health)');
+}
+window.eatFood = eatFood;
+updateStatsUI();
 
 function toggleFps() {
   fpsVisible = !fpsVisible;
@@ -614,6 +1071,45 @@ function animate() {
   if (fpsTime >= 0.5) {
     if (fpsVisible) fpsCounter.textContent = Math.round(fpsFrames / fpsTime) + ' FPS';
     fpsFrames = 0; fpsTime = 0;
+  }
+
+  // Update stats depletion (hunger, thirst, stamina)
+  if (!pointerLocked) {
+    // Deplete while not playing (simulated survival pressure)
+    hunger = Math.max(0, hunger - HUNGER_DEPLETION_RATE * deltaTime);
+    thirst = Math.max(0, thirst - THIRST_DEPLETION_RATE * deltaTime);
+    if (isSprinting) {
+      stamina = Math.max(0, stamina - STAMINA_DEPLETION_RATE * 2 * deltaTime);
+    } else {
+      stamina = Math.min(100, stamina + 0.002 * deltaTime); // regen when not sprinting
+    }
+  } else {
+    // While playing: depletion is handled by other systems (gathering, eating)
+    // but still drain slowly over time
+    hunger = Math.max(0, hunger - HUNGER_DEPLETION_RATE * deltaTime / 10);
+    thirst = Math.max(0, thirst - THIRST_DEPLETION_RATE * deltaTime / 10);
+    if (isSprinting) {
+      stamina = Math.max(0, stamina - STAMINA_DEPLETION_RATE * 1.5 * deltaTime);
+    } else {
+      stamina = Math.min(100, stamina + 0.001 * deltaTime); // regen when walking
+    }
+  }
+
+  if (hunger <= HUNGER_DEATH_THRESHOLD && pointerLocked) {
+    // Death by starvation - reset to new game
+    localStorage.removeItem('wildlands_save');
+    camera.position.set(0, 1.6, 0);
+    playerY = 1.6;
+    hunger = 100; thirst = 100; stamina = 100;
+    console.log('Starved to death - new game started');
+  }
+
+  // Update HUD bars
+  if (document.getElementById('hunger-bar')) {
+    document.getElementById('hunger-bar').style.width = `${(hunger / 100) * 100}%`;
+  }
+  if (document.getElementById('thirst-bar')) {
+    document.getElementById('thirst-bar').style.width = `${(thirst / 100) * 100}%`;
   }
 
   if (pointerLocked) {
@@ -661,6 +1157,14 @@ function animate() {
   updateWildlifeAI(deltaTime);
   if (attackCooldown > 0) attackCooldown -= deltaTime;
 
+  // Stat depletion
+  if (pointerLocked) {
+    playerStats.hunger = Math.max(0, playerStats.hunger - deltaTime * 0.4);
+    playerStats.thirst = Math.max(0, playerStats.thirst - deltaTime * 0.6);
+    if (playerStats.hunger <= 0 || playerStats.thirst <= 0) takeDamage(deltaTime * 3);
+    updateStatsUI();
+  }
+
   gameTime += deltaTime;
   sun.position.x = 50 * Math.cos(gameTime * 0.2);
   sun.position.z = 50 * Math.sin(gameTime * 0.2);
@@ -694,7 +1198,21 @@ function animate() {
   raycaster.far = 5;
   const gatherable = resources.filter(r => !r.gathered && r.currentAmount > 0).map(r => r.node);
   const hit = raycaster.intersectObjects(gatherable, true);
-  gatherPrompt.style.display = (pointerLocked && hit.length > 0) ? 'block' : 'none';
+  const nearWater = Math.sqrt((camera.position.x - waterPos.x) ** 2 + (camera.position.z - waterPos.z) ** 2) < waterPos.radius + 2;
+  if (nearWater) {
+    gatherPrompt.innerHTML = 'Press <b>[Q]</b> to drink';
+    gatherPrompt.style.display = pointerLocked ? 'block' : 'none';
+  } else {
+    gatherPrompt.innerHTML = 'Press <b>[E]</b> to gather';
+    gatherPrompt.style.display = (pointerLocked && hit.length > 0) ? 'block' : 'none';
+  }
+
+  toolBar.style.display = equippedTool ? 'block' : 'none';
+  if (equippedTool && TOOL_DEFS[equippedTool]) {
+    const slot = inventory.find(i => i.type === equippedTool);
+    const dur = slot ? (slot.durability ?? TOOL_DEFS[equippedTool].durability) : 0;
+    toolBar.textContent = `${TOOL_DEFS[equippedTool].name} [dur ${dur}] [4/5/6 swap]`;
+  }
 
   renderer.render(scene, camera);
 }

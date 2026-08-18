@@ -152,16 +152,55 @@ TODO-021: Fix vite.config.js rolloutOptions typo
 
 ### BLOCKED
 TODO-022: Push to GitHub and verify live deployment
-- [ ] git init + remote + initial commit
+- [x] git init + remote + initial commit
 - [ ] Trigger GitHub Actions workflow
 - [ ] Verify deployed URL serves the game
-- [ ] BLOCKED: no git remote configured; requires user credentials
+- [ ] Git repo initialized locally; remote push requires GitHub credentials
 
 ## FOLLOW-UP IDEAS (next audit)
-- [ ] Add crafting recipes that consume gathered wood/stone/metal
-- [ ] Building resource cost enforcement (currently free placement)
-- [ ] Player stats depletion + death screen (defined but not wired to gameplay)
-- [ ] Hunting loot drops from wildlife
-- [ ] Add arrow projectile visual instead of hitscan
-- [ ] Edge clamping for wildlife spawn/reset to stay in-bounds
+- [x] Add crafting recipes that consume gathered wood/stone/metal
+- [x] Building resource cost enforcement (currently free placement)
+- [x] Hunting loot drops from wildlife
+- [x] Add player stats depletion wired to gameplay + death screen
+- [x] Add hunger/thirst item consumption (berries, cooked meat)
+- [x] Add berry bushes as gatherable food source
+- [x] Health bar + hunger/thirst bars in HUD with IDs
+- [x] Add water source for thirst (pond/river interact)
+- [x] Add melee damage from wildlife attacking the player
+- [x] Edge clamping for wildlife spawn/reset to stay in-bounds
+- [x] Add tools with durability (hatchet -> faster wood, pickaxe -> faster stone, spear -> melee) [tribals.io/oxide core loop]
+- [ ] Add hunting skinning loot (leather, bones) and bone armor / bandages [oxide]
+- [x] Add building tier upgrades wood->stone->metal [oxide]
+- [x] Add health recovery: bandages crafted from cloth
+- [x] Add more wildlife variety (chicken passive, bear aggressive) [tribals.io]
+- [x] Add cooking mechanic (campfire converts wood->cooked_meat)
+- [x] Add arrow projectile visual instead of hitscan
+- [x] Add more wildlife variety (chicken passive, bear aggressive) [tribals.io]
+- [x] Add raw meat drops + cooked/raw food chain
+- [x] Add bandage healing mechanic
+- [x] Add tool hotkeys 4/5/6 (axe/pickaxe/spear)
 - [ ] Add unit tests or at minimum a smoke-test script
+- [ ] Add fog distance + shadow quality settings toggles in-game
+- [x] Add campfire cooking station + recipe
+- [x] Add bow ammunition requirement (arrows crafted from wood/stone)
+- [ ] Add wolf pack behavior (multiple wolves attack together)
+- [ ] Add multiplayer notes: party/clan systems (out of scope for static single-player, record as future)
+- [ ] Add building decay + toolbox upkeep [tribals.io/oxide] (out of scope for single-player, record as future)
+- [ ] Add experience/leveling via crafting [tribals.io]
+## Cycle 5: tribals.io / Oxide Reference Alignment (COMPLETE)
+GOAL: Match the Rust-style survival loop from tribals.io and Oxide references.
+- [x] Fixed corrupted main.js (duplicate decls, mid-file exports, undefined vars, AI never called)
+- [x] Tools with durability: stone axe (4=wood fast), stone pickaxe (5=stone fast), spear (6=melee dmg)
+- [x] Tool hotkeys 4/5/6, durability display in HUD + inventory
+- [x] Building tier upgrades wood->stone->metal via [U] on facing building
+- [x] Bandages craftable + [V] heal 30hp
+- [x] Campfire [G] build + [T] cook meat (consumes wood)
+- [x] Arrow ammo requirement for bow (craft arrows)
+- [x] Wildlife variety: chicken (passive, fast), bear (aggressive, tanky 15dmg)
+- [x] Raw meat + cooked meat food chain, meat drops from hunting
+- [x] Berry bushes, pond drinking [Q]
+- [x] Building costs enforced from inventory
+- [x] Base and subpath (GitHub Pages) production builds verified
+
+NEXT: git init + push for live deployment (blocked on user credentials) or
+deeper content expansion (XP/levels, more biomes, larger map).
