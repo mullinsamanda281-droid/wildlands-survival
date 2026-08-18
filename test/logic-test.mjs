@@ -146,6 +146,14 @@ test('addXp accumulates and levels up', () => {
   if (lvl.level < 1) throw new Error('level not advanced: ' + JSON.stringify(lvl));
 });
 
+console.log('\n-- Armor --');
+test('equipArmor consumes one armor item', () => {
+  api.resetInventory();
+  api.addToInventory('bone_armor', 1);
+  api.equipArmor();
+  if (totalOf('bone_armor') !== 0) throw new Error('armor not consumed');
+});
+
 console.log('\n==================================');
 console.log('RESULTS: ' + results.pass + ' passed, ' + results.fail + ' failed');
 if (results.fail > 0) {

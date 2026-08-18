@@ -1085,7 +1085,12 @@ function saveGame() {
     stats: { ...playerStats },
     level: { level: playerLevel, xp: playerXp },
     armor: equippedArmor,
-    resources: resources.map(r => ({ id: r.id, type: r.type, currentAmount: r.currentAmount, maxAmount: r.maxAmount }))
+    resources: resources.map(r => ({ id: r.id, type: r.type, currentAmount: r.currentAmount, maxAmount: r.maxAmount })),
+    buildings: placedBuildings.map(b => ({
+      type: b.userData.type, tier: b.userData.tier,
+      x: b.position.x, y: b.position.y, z: b.position.z
+    })),
+    campfires: CAMPFIRES.map(c => ({ x: c.x, z: c.z }))
   };
   localStorage.setItem('wildlands_save', JSON.stringify(gameState));
   console.log('Game saved');
@@ -1126,6 +1131,46 @@ function loadGame() {
       const s = gameState.resources.find(rs => rs.id === r.id);
       if (s) r.currentAmount = s.currentAmount;
     }
+  }
+  if (gameState.buildings && placedBuildings.length === 0) {
+    for (const b of gameState.buildings) {
+      const def = buildingTypes[b.type];
+      if (!def) continue;
+      const mat = BUILDING_TIERS[Math.min(2, b.tier || 0)];
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(def.size, 2, def.size),
+        new THREE.MeshStandardMaterial({ color: mat.color, flatShading: true })
+      );
+      mesh.position.set(b.x, b.y, b.z);
+      mesh.castShadow = true;
+      mesh.userData.tier = b.tier || 0;
+      mesh.userData.type = b.type;
+      scene.add(mesh);
+      placedBuildings.push(mesh);
+    }
+    console.log(`Restored ${gameState.buildings.length} buildings`);
+  }
+  if (gameState.campfires && CAMPFIRES.length === 0) {
+    for (const c of gameState.campfires) {
+      const fire = new THREE.Group();
+      const logs = new THREE.Mesh(
+        new THREE.CylinderGeometry(1, 1.2, 0.8, 8),
+        new THREE.MeshStandardMaterial({ color: '#6b4423', flatShading: true })
+      );
+      logs.position.y = 0.4;
+      fire.add(logs);
+      const flame = new THREE.Mesh(
+        new THREE.SphereGeometry(0.7, 8, 8),
+        new THREE.MeshStandardMaterial({ color: '#e67e22', flatShading: true, emissive: '#ff4500', emissiveIntensity: 0.8 })
+      );
+      flame.position.y = 1.2;
+      fire.add(flame);
+      fire.position.set(c.x, getTerrainHeight(c.x, c.z), c.z);
+      scene.add(fire);
+      CAMPFIRES.push({ mesh: fire, x: c.x, z: c.z });
+      campfireMeshes.push(fire);
+    }
+    console.log(`Restored ${gameState.campfires.length} campfires`);
   }
   console.log('Game loaded');
   return true;
@@ -1467,4 +1512,5 @@ function animate() {
 
   renderer.render(scene, camera);
 }
+loadGame();
 animate();
