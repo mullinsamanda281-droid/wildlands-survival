@@ -139,6 +139,40 @@ function initAmbientSounds() {
   }
 }
 
+// ----- GAME SOUND EFFECTS -----
+function playSfx(type, pitch = 1) {
+  if (!audioContext) return;
+  const now = audioContext.currentTime;
+  const osc = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  osc.type = 'sine';
+  const env = audioContext.createGain();
+  env.gain.value = 0.18;
+  const defs = {
+    gather: { freq: 320, slide: 220, dur: 0.12 },
+    hit: { freq: 200, slide: 120, dur: 0.1 },
+    hurt: { freq: 140, slide: 70, dur: 0.25 },
+    shoot: { freq: 520, slide: 900, dur: 0.15 },
+    eat: { freq: 420, slide: 300, dur: 0.18 },
+    drink: { freq: 600, slide: 400, dur: 0.2 },
+    craft: { freq: 330, slide: 660, dur: 0.2 },
+    heal: { freq: 700, slide: 1100, dur: 0.25 },
+    levelup: { freq: 520, slide: 1040, dur: 0.35 },
+    build: { freq: 240, slide: 360, dur: 0.18 },
+    death: { freq: 220, slide: 55, dur: 0.7 }
+  };
+  const d = defs[type];
+  if (!d) return;
+  osc.frequency.setValueAtTime(d.freq * pitch, now);
+  osc.frequency.exponentialRampToValueAtTime(d.slide * pitch, now + d.dur);
+  gain.gain.setValueAtTime(0.18, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + d.dur);
+  osc.connect(gain);
+  gain.connect(footstepGain);
+  osc.start(now);
+  osc.stop(now + d.dur);
+}
+
 function updateAmbientSounds() {
   if (!audioContext) return;
   const now = audioContext.currentTime;
@@ -396,6 +430,7 @@ function drinkWater() {
   const dz = camera.position.z - waterPos.z;
   if (Math.sqrt(dx * dx + dz * dz) < waterPos.radius + 2) {
     playerStats.thirst = Math.min(100, playerStats.thirst + 40);
+    playSfx('drink');
     updateStatsUI();
     console.log('Drank water');
     return true;
@@ -433,6 +468,7 @@ function gatherResource() {
       addToInventory(r.type, 1);
       addXp(2);
       flashMesh(r.node);
+      playSfx('gather', 0.9 + Math.random() * 0.3);
       lastGatherTime = now;
       useToolForGather(r.type);
       if (r.currentAmount <= 0) {
@@ -621,6 +657,7 @@ function craft(itemId) {
   }
   addToInventory(itemId, 1);
   addXp(10 + (Object.keys(recipe.cost).length - 1) * 5);
+  playSfx('craft');
   console.log(`Crafted ${recipe.name}`);
   return true;
 }
@@ -637,6 +674,7 @@ function addXp(amount) {
     playerXp -= xpToNext(playerLevel);
     playerLevel++;
     showLevelUp();
+    playSfx('levelup');
   }
 }
 
@@ -718,6 +756,7 @@ function attack(button, damage, range, color) {
     if (r) {
       const remaining = dealDamage(r, damage);
       console.log(`${button} hit ${r.type}, remaining: ${remaining}/${r.maxAmount}`);
+      playSfx('hit', 0.9 + Math.random() * 0.2);
     } else {
       for (const w of wildlife) {
         if (w.mesh === hit || (w.mesh.children && w.mesh.children.includes(hit))) {
@@ -744,6 +783,7 @@ function bowShot() {
     return;
   }
   launchArrow();
+  playSfx('shoot');
 }
 
 // ----- ARROW PROJECTILE -----
@@ -961,6 +1001,7 @@ function placeBuilding() {
   building.userData.type = selectedBuilding;
   scene.add(building);
   placedBuildings.push(building);
+  playSfx('build');
   console.log(`Placed ${selectedBuilding} (${BUILDING_TIERS[tier].name})`);
 }
 
@@ -1108,6 +1149,7 @@ function takeDamage(amount) {
     amount = Math.round(amount * (1 - ARMOR_DEFS[equippedArmor].damageReduction));
   }
   playerStats.health = Math.max(0, playerStats.health - amount);
+  playSfx('hurt');
   updateStatsUI();
   if (playerStats.health <= 0) showDeathScreen();
 }
@@ -1134,6 +1176,7 @@ function eatFood(type) {
   if (removeFromInventory(type, 1) === 0) return false;
   if (type === 'berries') playerStats.hunger = Math.min(100, playerStats.hunger + value);
   else playerStats.hunger = Math.min(100, playerStats.hunger + value);
+  playSfx('eat');
   updateStatsUI();
   return true;
 }
@@ -1149,6 +1192,7 @@ function updateStatsUI() {
 
 function showDeathScreen() {
   if (document.getElementById('death-screen')) return;
+  playSfx('death');
   const overlay = document.createElement('div');
   overlay.id = 'death-screen';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#ff4444;font-family:Arial,sans-serif;z-index:2000;';
@@ -1182,6 +1226,7 @@ document.addEventListener('keydown', (event) => {
 function useBandage() {
   if (removeFromInventory('bandage', 1) === 0) { console.log('No bandages! Craft with [C]'); return; }
   playerStats.health = Math.min(100, playerStats.health + 30);
+  playSfx('heal');
   updateStatsUI();
   console.log('Bandage used (+30 health)');
 }
