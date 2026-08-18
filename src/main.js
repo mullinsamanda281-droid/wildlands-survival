@@ -157,10 +157,28 @@ const terrainSize = 500;
 const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 50, 50);
 terrainGeometry.rotateX(-Math.PI / 2);
 const terrainVertices = terrainGeometry.attributes.position.array;
-for (let i = 0; i < terrainVertices.length; i += 3) {
-  terrainVertices[i + 1] += (Math.random() - 0.5) * 20;
+
+function smoothNoise(x, z) {
+  return Math.sin(x * 0.02) * Math.cos(z * 0.02) * 6 +
+    Math.sin(x * 0.05 + 1.7) * Math.cos(z * 0.05) * 4 +
+    Math.sin(x * 0.11 + 4.2) * Math.cos(z * 0.11) * 2.5;
 }
-const terrain = new THREE.Mesh(terrainGeometry, new THREE.MeshStandardMaterial({ color: '#8b5a2b', flatShading: true }));
+
+const terrainColors = new Float32Array(terrainVertices.length);
+for (let i = 0; i < terrainVertices.length; i += 3) {
+  const x = terrainVertices[i];
+  const z = terrainVertices[i + 2];
+  const h = smoothNoise(x, z);
+  terrainVertices[i + 1] = h;
+  let c = [0.44, 0.62, 0.29];
+  if (h > 8) c = [0.55, 0.42, 0.28];
+  else if (h > 5) c = [0.63, 0.5, 0.32];
+  else if (h < -4) c = [0.5, 0.55, 0.4];
+  terrainColors[i] = c[0]; terrainColors[i + 1] = c[1]; terrainColors[i + 2] = c[2];
+}
+terrainGeometry.setAttribute('color', new THREE.BufferAttribute(terrainColors, 3));
+terrainGeometry.computeVertexNormals();
+const terrain = new THREE.Mesh(terrainGeometry, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true }));
 terrain.receiveShadow = true;
 scene.add(terrain);
 
@@ -176,8 +194,9 @@ function getTerrainHeight(x, z) {
 
 function getFootstepMaterial(x, z) {
   const y = getTerrainHeight(x, z);
-  if (y > 10) return 'rock';
+  if (y > 8) return 'rock';
   if (y > 5) return 'dirt';
+  if (y < -4) return 'grass';
   return 'grass';
 }
 
