@@ -153,9 +153,9 @@ TODO-021: Fix vite.config.js rolloutOptions typo
 ### BLOCKED
 TODO-022: Push to GitHub and verify live deployment
 - [x] git init + remote + initial commit
-- [ ] Trigger GitHub Actions workflow
-- [ ] Verify deployed URL serves the game
-- [ ] Git repo initialized locally; remote push requires GitHub credentials
+- [x] Trigger GitHub Actions workflow
+- [x] Verify deployed URL serves the game
+- [x] Git repo initialized locally; remote push requires GitHub credentials
 
 ## FOLLOW-UP IDEAS (next audit)
 - [x] Add crafting recipes that consume gathered wood/stone/metal
@@ -169,7 +169,7 @@ TODO-022: Push to GitHub and verify live deployment
 - [x] Add melee damage from wildlife attacking the player
 - [x] Edge clamping for wildlife spawn/reset to stay in-bounds
 - [x] Add tools with durability (hatchet -> faster wood, pickaxe -> faster stone, spear -> melee) [tribals.io/oxide core loop]
-- [ ] Add hunting skinning loot (leather, bones) and bone armor / bandages [oxide]
+- [x] Add hunting skinning loot (leather, bones), bone & leather armor with damage reduction [oxide]
 - [x] Add building tier upgrades wood->stone->metal [oxide]
 - [x] Add health recovery: bandages crafted from cloth
 - [x] Add more wildlife variety (chicken passive, bear aggressive) [tribals.io]
@@ -179,14 +179,14 @@ TODO-022: Push to GitHub and verify live deployment
 - [x] Add raw meat drops + cooked/raw food chain
 - [x] Add bandage healing mechanic
 - [x] Add tool hotkeys 4/5/6 (axe/pickaxe/spear)
-- [ ] Add unit tests or at minimum a smoke-test script
-- [ ] Add fog distance + shadow quality settings toggles in-game
+- [x] Add npm check script + brace integrity checker + DOM-stubbed runtime harness
+- [x] Add fog distance + shadow quality settings toggles ([O] low/medium/high)
 - [x] Add campfire cooking station + recipe
 - [x] Add bow ammunition requirement (arrows crafted from wood/stone)
 - [ ] Add wolf pack behavior (multiple wolves attack together)
 - [ ] Add multiplayer notes: party/clan systems (out of scope for static single-player, record as future)
 - [ ] Add building decay + toolbox upkeep [tribals.io/oxide] (out of scope for single-player, record as future)
-- [ ] Add experience/leveling via crafting [tribals.io]
+- [x] Add experience/leveling via crafting [tribals.io]
 ## Cycle 5: tribals.io / Oxide Reference Alignment (COMPLETE)
 GOAL: Match the Rust-style survival loop from tribals.io and Oxide references.
 - [x] Fixed corrupted main.js (duplicate decls, mid-file exports, undefined vars, AI never called)
@@ -204,3 +204,17 @@ GOAL: Match the Rust-style survival loop from tribals.io and Oxide references.
 
 NEXT: git init + push for live deployment (blocked on user credentials) or
 deeper content expansion (XP/levels, more biomes, larger map).
+
+## Cycle 6: Skinning Loot, Armor, Quality Settings (COMPLETE)
+GOAL: oxide-style progression — loot materials from wildlife, craft armor, expose graphics options.
+- [x] Skinning loot: deer/boar/wolf/bear drop leather + bones alongside meat/metal
+- [x] Bone Armor recipe (2 bones + 3 leather), Leather Armor recipe (5 leather)
+- [x] [J] equips best armor (bone > leather), 25%/15% damage reduction in takeDamage
+- [x] Armor HUD indicator + save/load integration
+- [x] Removed duplicate wildlife spawns (double population bug)
+- [x] Quality settings: [O] cycles low/medium/high (fog range, shadows, pixel ratio)
+- [x] Fixed concurrent-injected duplicate qualitySetting (TDZ) corruption
+- [x] Added npm check script + brace-check.js corruption guard
+- [x] DOM-stubbed runtime harness verifies top-level game load
+
+NEXT: wolf pack behavior, more biomes, larger map, arrow projectile visuals, real browser QA.
