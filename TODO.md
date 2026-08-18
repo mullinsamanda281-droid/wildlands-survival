@@ -218,3 +218,14 @@ GOAL: oxide-style progression — loot materials from wildlife, craft armor, exp
 - [x] DOM-stubbed runtime harness verifies top-level game load
 
 NEXT: wolf pack behavior, more biomes, larger map, arrow projectile visuals, real browser QA.
+
+## Cycle 7: Wolf Packs, Arrow Projectiles, Terrain, Audio (COMPLETE)
+GOAL: deeper combat feel + visual/audio polish + terrain realism.
+- [x] Wolf pack behavior: pack-scaled damage (6 + packSize*2), 3-wolf pack spawn
+- [x] Real arrow projectiles: gravity arc, terrain/wildlife/resource impact (replaces hitscan)
+- [x] Smooth layered-noise terrain with height-based biome vertex colors (grass/dirt/rock)
+- [x] Resources, berry bushes, wildlife, pond now sit on terrain height (floating/buried fix)
+- [x] Procedural SFX: gather/hit/hurt/shoot/eat/drink/craft/heal/levelup/build/death
+- [x] Fixed pond buried under terrain
+
+NEXT: real browser QA, more biomes, larger map, balancing pass, tutorial/onboarding.
