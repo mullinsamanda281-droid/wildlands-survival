@@ -1190,6 +1190,10 @@ const hud = document.createElement('div');
 hud.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;font-family:Arial,sans-serif;color:#fff;z-index:1000;';
 document.body.appendChild(hud);
 
+const crosshair = document.createElement('div');
+crosshair.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:6px;height:6px;border:2px solid rgba(255,255,255,0.9);border-radius:50%;box-shadow:0 0 3px rgba(0,0,0,0.7);z-index:1002;';
+hud.appendChild(crosshair);
+
 // ----- OBJECTIVE TRACKER -----
 const objectiveBar = document.createElement('div');
 objectiveBar.style.cssText = 'position:absolute;top:12px;left:50%;transform:translateX(-50%);color:#e8e8e8;font-family:monospace;font-size:13px;background:rgba(0,0,0,0.45);padding:6px 14px;border-radius:6px;text-shadow:1px 1px 2px #000;z-index:1002;';
@@ -1509,6 +1513,7 @@ function animate() {
 
   levelBar.textContent = `LVL ${playerLevel} | XP ${playerXp}/${xpToNext(playerLevel)}`;
   armorBar.textContent = equippedArmor ? `${ARMOR_DEFS[equippedArmor].name} [${Math.round(ARMOR_DEFS[equippedArmor].damageReduction * 100)}% DR]` : 'No armor [J to equip]';
+  crosshair.style.display = pointerLocked ? 'block' : 'none';
 
   renderer.render(scene, camera);
 }
