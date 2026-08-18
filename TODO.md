@@ -229,3 +229,17 @@ GOAL: deeper combat feel + visual/audio polish + terrain realism.
 - [x] Fixed pond buried under terrain
 
 NEXT: real browser QA, more biomes, larger map, balancing pass, tutorial/onboarding.
+
+## Cycle 8: Bugfixes, Tests, Objectives, Sky (COMPLETE)
+GOAL: QA-driven hardening + onboarding + visuals.
+- [x] CRITICAL: dealDamage now damages wildlife (was one-shotting everything — checked userData.health instead of entity.health)
+- [x] Rebalance wildlife HP (deer 15, boar 25, wolf 20, chicken 5, bear 60) + bow 8 dmg
+- [x] Damage numbers show '-' instead of '+'
+- [x] 10 logic unit tests (inventory/craft/damage/stats/XP/armor) run in CI on every push
+- [x] Objective tracker HUD: guides new players through gather->craft->hunt->cook->level loop
+- [x] Auto-load save on startup (was defined but never called — saves never restored)
+- [x] Buildings + campfires persist in save/load
+- [x] Coherent day/night: synced sun/sky, visible sun mesh, starfield fading at night
+- [x] [O] quality toggle added to control hints
+
+NEXT: wolf pack test, more content (biomes, animals), performance profiling, real browser QA.
