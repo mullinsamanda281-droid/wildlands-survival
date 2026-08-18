@@ -1122,6 +1122,37 @@ const hud = document.createElement('div');
 hud.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;font-family:Arial,sans-serif;color:#fff;z-index:1000;';
 document.body.appendChild(hud);
 
+// ----- OBJECTIVE TRACKER -----
+const objectiveBar = document.createElement('div');
+objectiveBar.style.cssText = 'position:absolute;top:12px;left:50%;transform:translateX(-50%);color:#e8e8e8;font-family:monospace;font-size:13px;background:rgba(0,0,0,0.45);padding:6px 14px;border-radius:6px;text-shadow:1px 1px 2px #000;z-index:1002;';
+hud.appendChild(objectiveBar);
+
+let objectiveIndex = 0;
+const objectives = [
+  { text: 'Gather WOOD — walk up to a tree and press [E]', check: () => totalInventory('wood') >= 10 },
+  { text: 'Craft a STONE AXE — press [C] then select Stone Axe', check: () => hasItem('stone_axe') },
+  { text: 'Hunt WILDLIFE — press LMB to attack deer & boar', check: () => hasItem('meat') },
+  { text: 'Build a CAMPFIRE — press [G], then [T] to cook meat', check: () => hasItem('cooked_meat') },
+  { text: 'Survive! Stay fed, hydrated, and level up', check: () => playerLevel >= 2 }
+];
+
+function totalInventory(type) {
+  return inventory.filter(i => i.type === type).reduce((s, i) => s + i.count, 0);
+}
+function hasItem(type) {
+  return totalInventory(type) > 0;
+}
+function updateObjective() {
+  if (objectiveIndex >= objectives.length) return;
+  while (objectiveIndex < objectives.length && objectives[objectiveIndex].check()) objectiveIndex++;
+  if (objectiveIndex >= objectives.length) {
+    objectiveBar.textContent = 'OBJECTIVES COMPLETE — keep surviving!';
+  } else {
+    objectiveBar.textContent = 'OBJECTIVE: ' + objectives[objectiveIndex].text;
+  }
+}
+updateObjective();
+
 const gatherPrompt = document.createElement('div');
 gatherPrompt.style.cssText = 'position:absolute;bottom:80px;left:50%;transform:translateX(-50%);font-size:14px;color:#e8c54a;text-shadow:1px 1px 2px #000;background:rgba(0,0,0,0.6);padding:8px 16px;border-radius:4px;letter-spacing:1px;white-space:nowrap;display:none;';
 gatherPrompt.innerHTML = 'Press <b>[E]</b> to gather';
@@ -1359,6 +1390,7 @@ function animate() {
     playerStats.thirst = Math.max(0, playerStats.thirst - deltaTime * 0.6);
     if (playerStats.hunger <= 0 || playerStats.thirst <= 0) takeDamage(deltaTime * 3);
     updateStatsUI();
+    updateObjective();
   }
 
   gameTime += deltaTime;
