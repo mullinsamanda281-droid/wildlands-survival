@@ -889,10 +889,10 @@ function updateArrows(deltaTime) {
 
 const wildlife = [];
 function createWildlife(x, z, type) {
-  const sizes = { deer: 4, boar: 6, wolf: 5, chicken: 1.5, bear: 8 };
-  const speeds = { deer: 1.5, boar: 1.0, wolf: 2.0, chicken: 2.5, bear: 0.8 };
-  const colors = { deer: '#6b4c4c', boar: '#8b4513', wolf: '#2c5f2d', chicken: '#f4e0c5', bear: '#5b3a1e' };
-  const healths = { deer: 15, boar: 25, wolf: 20, chicken: 5, bear: 60 };
+  const sizes = { deer: 4, boar: 6, wolf: 5, chicken: 1.5, bear: 8, rabbit: 1 };
+  const speeds = { deer: 1.5, boar: 1.0, wolf: 2.0, chicken: 2.5, bear: 0.8, rabbit: 3.0 };
+  const colors = { deer: '#6b4c4c', boar: '#8b4513', wolf: '#2c5f2d', chicken: '#f4e0c5', bear: '#5b3a1e', rabbit: '#c9b8a8' };
+  const healths = { deer: 15, boar: 25, wolf: 20, chicken: 5, bear: 60, rabbit: 3 };
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(sizes[type], 12, 12),
     new THREE.MeshStandardMaterial({ color: colors[type], flatShading: true })
@@ -918,6 +918,10 @@ createWildlife(-30, 60, 'chicken');
 createWildlife(40, -20, 'chicken');
 createWildlife(0, -150, 'bear');
 createWildlife(-200, 30, 'bear');
+createWildlife(50, 180, 'rabbit');
+createWildlife(-120, -60, 'rabbit');
+createWildlife(150, 40, 'rabbit');
+createWildlife(-50, -120, 'rabbit');
 
 function removeWildlife(w) {
   const idx = wildlife.indexOf(w);
@@ -927,7 +931,7 @@ function removeWildlife(w) {
     const loot = {
       deer: { wood: 2, meat: 2, leather: 2 }, boar: { metal: 1, meat: 2, leather: 1 },
       wolf: { metal: 2, meat: 1, leather: 1, bones: 1 }, chicken: { meat: 1 },
-      bear: { metal: 3, meat: 3, leather: 3, bones: 2 }
+      bear: { metal: 3, meat: 3, leather: 3, bones: 2 }, rabbit: { meat: 1, leather: 1 }
     }[w.type] || { wood: 1 };
     for (const [type, count] of Object.entries(loot)) addToInventory(type, count);
     addXp(15);
@@ -943,7 +947,7 @@ function updateWildlifeAI(deltaTime) {
     const dx = w.x - px, dz = w.z - pz;
     const distance = Math.sqrt(dx * dx + dz * dz);
     let tx = w.x, tz = w.z;
-    const passive = w.type === 'deer' || w.type === 'chicken';
+    const passive = w.type === 'deer' || w.type === 'chicken' || w.type === 'rabbit';
     const aggressive = w.type === 'wolf' || w.type === 'boar' || w.type === 'bear';
     if (distance < (passive ? 30 : aggressive ? 60 : 30)) {
       if (passive) {
