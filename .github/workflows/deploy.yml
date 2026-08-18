@@ -22,7 +22,7 @@ jobs:
         run: npm ci
 
       - name: Set GITHUB_PAGES_BASE
-        run: echo "GITHUB_PAGES_BASE=my-game-project" >> $GITHUB_ENV
+        run: echo "GITHUB_PAGES_BASE=wildlands-survival" >> $GITHUB_ENV
 
       - name: Build Vite
         run: npm run build
