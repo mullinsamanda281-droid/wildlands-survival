@@ -154,6 +154,14 @@ test('equipArmor consumes one armor item', () => {
   if (totalOf('bone_armor') !== 0) throw new Error('armor not consumed');
 });
 
+console.log('\n-- Death / Respawn --');
+test('takeDamage can kill player (health reaches 0)', () => {
+  api.resetPlayerHealth();
+  api.takeDamage(100);
+  if (!api.isPlayerDead()) throw new Error('player should be dead at 0 health');
+  api.resetPlayerHealth();
+});
+
 console.log('\n==================================');
 console.log('RESULTS: ' + results.pass + ' passed, ' + results.fail + ' failed');
 if (results.fail > 0) {

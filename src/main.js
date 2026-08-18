@@ -743,7 +743,9 @@ if (typeof window !== 'undefined' && window.__TEST__) {
     eatFood, drinkWater, takeDamage, equipArmor,
     addXp, getPlayerStats: () => playerStats,
     getLevel: () => ({ level: playerLevel, xp: playerXp }),
-    resetInventory: () => { inventory = []; }
+    resetInventory: () => { inventory = []; },
+    isPlayerDead: () => playerStats.health <= 0,
+    resetPlayerHealth: () => { playerStats.health = 100; }
   };
 }
 renderCrafting();
@@ -1189,7 +1191,42 @@ function newGame() {
   playerY = 1.6;
   rotation.set(0, 0, 0);
   inventory = [];
+  playerStats.health = 100;
+  playerStats.hunger = 100;
+  playerStats.thirst = 100;
+  playerStats.stamina = 100;
+  playerLevel = 1;
+  playerXp = 0;
+  equippedArmor = null;
+  equippedTool = null;
+  selectedBuilding = null;
+  objectiveIndex = 0;
+  for (const b of placedBuildings) scene.remove(b);
+  placedBuildings.length = 0;
+  for (const c of campfireMeshes) scene.remove(c);
+  campfireMeshes.length = 0;
+  CAMPFIRES.length = 0;
+  for (const a of arrows) scene.remove(a);
+  arrows.length = 0;
+  for (const w of wildlife) scene.remove(w.mesh);
+  wildlife.length = 0;
+  createWildlife(100, 100, 'deer');
+  createWildlife(-80, 150, 'boar');
+  createWildlife(200, -100, 'wolf');
+  createWildlife(190, -90, 'wolf');
+  createWildlife(210, -110, 'wolf');
+  createWildlife(20, 40, 'chicken');
+  createWildlife(-30, 60, 'chicken');
+  createWildlife(40, -20, 'chicken');
+  createWildlife(0, -150, 'bear');
+  createWildlife(-200, 30, 'bear');
+  createWildlife(50, 180, 'rabbit');
+  createWildlife(-120, -60, 'rabbit');
+  createWildlife(150, 40, 'rabbit');
+  createWildlife(-50, -120, 'rabbit');
   updateInventoryUI();
+  updateStatsUI();
+  updateObjective();
   console.log('New game started');
 }
 
