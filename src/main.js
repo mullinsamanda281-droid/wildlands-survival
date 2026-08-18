@@ -394,6 +394,7 @@ function gatherResource() {
     if (r && r.currentAmount > 0) {
       r.currentAmount--;
       addToInventory(r.type, 1);
+      addXp(2);
       flashMesh(r.node);
       lastGatherTime = now;
       useToolForGather(r.type);
@@ -580,8 +581,32 @@ function craft(itemId) {
     }
   }
   addToInventory(itemId, 1);
+  addXp(10 + (Object.keys(recipe.cost).length - 1) * 5);
   console.log(`Crafted ${recipe.name}`);
   return true;
+}
+
+// ----- XP / LEVELING -----
+let playerLevel = 1;
+let playerXp = 0;
+const xpToNext = (level) => level * 100;
+let levelNoticeTimer = 0;
+
+function addXp(amount) {
+  playerXp += amount;
+  while (playerXp >= xpToNext(playerLevel)) {
+    playerXp -= xpToNext(playerLevel);
+    playerLevel++;
+    showLevelUp();
+  }
+}
+
+function showLevelUp() {
+  const notice = document.createElement('div');
+  notice.style.cssText = 'position:absolute;top:30%;left:50%;transform:translate(-50%,-50%);color:#ffd700;font-size:32px;font-weight:bold;text-shadow:1px 1px 3px #000;font-family:Arial,sans-serif;pointer-events:none;z-index:1002;';
+  notice.textContent = `LEVEL ${playerLevel}!`;
+  document.body.appendChild(notice);
+  setTimeout(() => notice.remove(), 2000);
 }
 
 document.addEventListener('keydown', (event) => {
@@ -731,6 +756,7 @@ function removeWildlife(w) {
       bear: { metal: 3, meat: 3 }
     }[w.type] || { wood: 1 };
     for (const [type, count] of Object.entries(loot)) addToInventory(type, count);
+    addXp(15);
     console.log(`Looted ${w.type}: ${JSON.stringify(loot)}`);
     setTimeout(() => createWildlife(100 + Math.random() * 200, 100 + Math.random() * 200, w.type), 15000);
   }
@@ -876,6 +902,7 @@ function saveGame() {
     inventory: inventory.map(i => ({ ...i })),
     timeOfDay: gameTime,
     stats: { ...playerStats },
+    level: { level: playerLevel, xp: playerXp },
     resources: resources.map(r => ({ id: r.id, type: r.type, currentAmount: r.currentAmount, maxAmount: r.maxAmount }))
   };
   localStorage.setItem('wildlands_save', JSON.stringify(gameState));
@@ -906,6 +933,10 @@ function loadGame() {
     playerStats.thirst = gameState.stats.thirst ?? 100;
     playerStats.stamina = gameState.stats.stamina ?? 100;
     updateStatsUI();
+  }
+  if (gameState.level) {
+    playerLevel = gameState.level.level ?? 1;
+    playerXp = gameState.level.xp ?? 0;
   }
   if (gameState.resources) {
     for (const r of resources) {
@@ -943,6 +974,10 @@ hud.appendChild(fpsCounter);
 const toolBar = document.createElement('div');
 toolBar.style.cssText = 'position:absolute;bottom:110px;left:50%;transform:translateX(-50%);color:#e8c54a;font-family:monospace;font-size:14px;text-shadow:1px 1px 2px #000;display:none;z-index:1002;';
 hud.appendChild(toolBar);
+
+const levelBar = document.createElement('div');
+levelBar.style.cssText = 'position:absolute;bottom:140px;left:50%;transform:translateX(-50%);color:#ffd700;font-family:monospace;font-size:13px;text-shadow:1px 1px 2px #000;z-index:1002;';
+hud.appendChild(levelBar);
 
 let gameTime = 0;
 let lastFrameTime = performance.now();
@@ -1176,6 +1211,8 @@ function animate() {
     const dur = slot ? (slot.durability ?? TOOL_DEFS[equippedTool].durability) : 0;
     toolBar.textContent = `${TOOL_DEFS[equippedTool].name} [dur ${dur}] [4/5/6 swap]`;
   }
+
+  levelBar.textContent = `LVL ${playerLevel} | XP ${playerXp}/${xpToNext(playerLevel)}`;
 
   renderer.render(scene, camera);
 }
