@@ -327,12 +327,15 @@ document.addEventListener('keydown', (event) => {
 });
 document.addEventListener('mousedown', (event) => {
   if (!pointerLocked) return;
+  event.preventDefault();
   if (event.button === 0) {
     if (selectedBuilding) placeBuilding();
     else meleeAttack();
   }
-  if (event.button === 2) bowShot();
+  if (event.button === 2) { event.preventDefault(); bowShot(); }
+  if (event.button === 2 && pointerLocked) return false;
 });
+document.addEventListener('contextmenu', (event) => event.preventDefault());
 
 const resources = [];
 const treeTypes = [
@@ -1290,6 +1293,10 @@ const armorBar = document.createElement('div');
 armorBar.style.cssText = 'position:absolute;bottom:158px;left:50%;transform:translateX(-50%);color:#d4c4a8;font-family:monospace;font-size:13px;text-shadow:1px 1px 2px #000;z-index:1002;';
 hud.appendChild(armorBar);
 
+const ammoBar = document.createElement('div');
+ammoBar.style.cssText = 'position:absolute;top:80px;right:20px;color:#e8e8e8;font-family:monospace;font-size:13px;background:rgba(0,0,0,0.45);padding:4px 10px;border-radius:4px;z-index:1002;';
+hud.appendChild(ammoBar);
+
 let gameTime = 0;
 let lastFrameTime = performance.now();
 let fpsFrames = 0;
@@ -1557,6 +1564,7 @@ function animate() {
 
   levelBar.textContent = `LVL ${playerLevel} | XP ${playerXp}/${xpToNext(playerLevel)}`;
   armorBar.textContent = equippedArmor ? `${ARMOR_DEFS[equippedArmor].name} [${Math.round(ARMOR_DEFS[equippedArmor].damageReduction * 100)}% DR]` : 'No armor [J to equip]';
+  ammoBar.textContent = `Arrows: ${totalInventory('arrow')} in flight: ${arrows.length}`;
   crosshair.style.display = pointerLocked ? 'block' : 'none';
 
   renderer.render(scene, camera);
