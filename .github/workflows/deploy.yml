@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run logic tests
+        run: npm test
+
       - name: Set GITHUB_PAGES_BASE
         run: echo "GITHUB_PAGES_BASE=wildlands-survival" >> $GITHUB_ENV
 

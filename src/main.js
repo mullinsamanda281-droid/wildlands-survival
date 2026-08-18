@@ -710,6 +710,16 @@ function renderCrafting() {
   }
 }
 window.craftItem = craft;
+if (typeof window !== 'undefined' && window.__TEST__) {
+  window.__testAPI = {
+    getInventory: () => inventory,
+    addToInventory, removeFromInventory, craft, dealDamage,
+    eatFood, drinkWater, takeDamage, equipArmor,
+    addXp, getPlayerStats: () => playerStats,
+    getLevel: () => ({ level: playerLevel, xp: playerXp }),
+    resetInventory: () => { inventory = []; }
+  };
+}
 renderCrafting();
 
 let attackCooldown = 0;
