@@ -59,7 +59,7 @@ const glStub = new Proxy({}, glHandler);
 const makeEl = () => ({ style: {}, appendChild() {}, addEventListener() {}, remove() {}, removeChild() {}, set innerHTML(v) {}, get innerHTML() { return ''; }, set textContent(v) {}, getContext: () => glStub, classList: { add() {}, remove() {} }, parentNode: null, requestPointerLock() {}, width: 0, height: 0 });
 
 globalThis.window = { addEventListener() {}, innerWidth: 1920, innerHeight: 1080, devicePixelRatio: 1, AudioContext: undefined, requestAnimationFrame: () => 0 };
-globalThis.document = { createElement: () => makeEl(), querySelector: () => makeEl(), querySelectorAll: () => [], getElementById: () => null, body: { appendChild() {}, addEventListener() {}, style: {} }, addEventListener() {}, exitPointerLock() {} };
+globalThis.document = { createElement: () => makeEl(), querySelector: () => makeEl(), querySelectorAll: () => [], getElementById: () => makeEl(), body: { appendChild() {}, addEventListener() {}, style: {} }, addEventListener() {}, exitPointerLock() {} };
 globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 globalThis.requestAnimationFrame = () => 0;
 globalThis.performance = { now: () => 0 };

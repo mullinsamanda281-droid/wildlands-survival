@@ -258,6 +258,7 @@ function getFootstepMaterial(x, z) {
 }
 
 let pointerLocked = false;
+let isPaused = false;
 const rotation = new THREE.Euler();
 
 document.body.addEventListener('click', () => {
@@ -288,13 +289,6 @@ let isSprinting = false;
 let canJump = true;
 const gravity = -0.02;
 let playerY = 1.6;
-let hunger = 100;
-let thirst = 100;
-let stamina = 100;
-const HUNGER_DEPLETION_RATE = 0.01; // per second
-const THIRST_DEPLETION_RATE = 0.015; // per second
-const STAMINA_DEPLETION_RATE = 0.005; // per second, increases when sprinting
-const HUNGER_DEATH_THRESHOLD = 0;
 
 document.addEventListener('keydown', (event) => {
   switch (event.code) {
@@ -1199,6 +1193,7 @@ function newGame() {
   equippedArmor = null;
   equippedTool = null;
   selectedBuilding = null;
+  isPaused = false;
   objectiveIndex = 0;
   for (const b of placedBuildings) scene.remove(b);
   placedBuildings.length = 0;
@@ -1357,13 +1352,19 @@ function updateStatsUI() {
 
 function showDeathScreen() {
   if (document.getElementById('death-screen')) return;
+  isPaused = true;
   playSfx('death');
   const overlay = document.createElement('div');
   overlay.id = 'death-screen';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#ff4444;font-family:Arial,sans-serif;z-index:2000;';
   overlay.innerHTML = '<div style="font-size:48px;font-weight:bold;margin-bottom:20px;">YOU DIED</div>' +
-    '<button onclick="newGame();document.getElementById(\'death-screen\').remove();document.exitPointerLock();" style="padding:12px 32px;font-size:18px;background:#555;color:#fff;border:none;border-radius:6px;cursor:pointer;">New Game</button>';
+    '<button id="death-restart" style="padding:12px 32px;font-size:18px;background:#555;color:#fff;border:none;border-radius:6px;cursor:pointer;">New Game</button>';
   document.body.appendChild(overlay);
+  document.getElementById('death-restart').addEventListener('click', () => {
+    newGame();
+    overlay.remove();
+    document.exitPointerLock();
+  });
 }
 
 document.addEventListener('keydown', (event) => {
@@ -1385,6 +1386,24 @@ document.addEventListener('keydown', (event) => {
   if (event.code === 'KeyO') {
     const order = ['low', 'medium', 'high'];
     applyQuality(order[(order.indexOf(currentQuality) + 1) % order.length]);
+  }
+  if (event.code === 'Escape') {
+    const existing = document.getElementById('pause-screen');
+    if (isPaused) {
+      isPaused = false;
+      if (existing) existing.remove();
+    } else {
+      isPaused = true;
+      const p = document.createElement('div');
+      p.id = 'pause-screen';
+      p.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:Arial,sans-serif;z-index:2001;';
+      p.innerHTML = '<div style="font-size:28px;margin-bottom:20px;">PAUSED</div><button id="pause-resume" style="padding:10px 24px;font-size:16px;background:#444;color:#fff;border:none;border-radius:6px;cursor:pointer;">Resume</button>';
+      document.body.appendChild(p);
+      document.getElementById('pause-resume').addEventListener('click', () => {
+        isPaused = false;
+        if (p.parentNode) p.parentNode.removeChild(p);
+      });
+    }
   }
 });
 
@@ -1418,46 +1437,11 @@ function animate() {
     fpsFrames = 0; fpsTime = 0;
   }
 
-  // Update stats depletion (hunger, thirst, stamina)
-  if (!pointerLocked) {
-    // Deplete while not playing (simulated survival pressure)
-    hunger = Math.max(0, hunger - HUNGER_DEPLETION_RATE * deltaTime);
-    thirst = Math.max(0, thirst - THIRST_DEPLETION_RATE * deltaTime);
-    if (isSprinting) {
-      stamina = Math.max(0, stamina - STAMINA_DEPLETION_RATE * 2 * deltaTime);
-    } else {
-      stamina = Math.min(100, stamina + 0.002 * deltaTime); // regen when not sprinting
-    }
-  } else {
-    // While playing: depletion is handled by other systems (gathering, eating)
-    // but still drain slowly over time
-    hunger = Math.max(0, hunger - HUNGER_DEPLETION_RATE * deltaTime / 10);
-    thirst = Math.max(0, thirst - THIRST_DEPLETION_RATE * deltaTime / 10);
-    if (isSprinting) {
-      stamina = Math.max(0, stamina - STAMINA_DEPLETION_RATE * 1.5 * deltaTime);
-    } else {
-      stamina = Math.min(100, stamina + 0.001 * deltaTime); // regen when walking
-    }
+  if (!pointerLocked || isPaused) {
+    // While not playing: keep stat regeneration off (player must be in-world for depletion)
   }
 
-  if (hunger <= HUNGER_DEATH_THRESHOLD && pointerLocked) {
-    // Death by starvation - reset to new game
-    localStorage.removeItem('wildlands_save');
-    camera.position.set(0, 1.6, 0);
-    playerY = 1.6;
-    hunger = 100; thirst = 100; stamina = 100;
-    console.log('Starved to death - new game started');
-  }
-
-  // Update HUD bars
-  if (document.getElementById('hunger-bar')) {
-    document.getElementById('hunger-bar').style.width = `${(hunger / 100) * 100}%`;
-  }
-  if (document.getElementById('thirst-bar')) {
-    document.getElementById('thirst-bar').style.width = `${(thirst / 100) * 100}%`;
-  }
-
-  if (pointerLocked) {
+  if (pointerLocked && !isPaused) {
     camera.rotation.order = 'YXZ';
     camera.rotation.y = rotation.y;
     camera.rotation.x = rotation.x;
@@ -1499,12 +1483,14 @@ function animate() {
   }
 
   updateAmbientSounds();
-  updateWildlifeAI(deltaTime);
-  updateArrows(deltaTime);
-  if (attackCooldown > 0) attackCooldown -= deltaTime;
+  if (pointerLocked && !isPaused) {
+    updateWildlifeAI(deltaTime);
+    updateArrows(deltaTime);
+    if (attackCooldown > 0) attackCooldown -= deltaTime;
+  }
 
   // Stat depletion
-  if (pointerLocked) {
+  if (pointerLocked && !isPaused) {
     playerStats.hunger = Math.max(0, playerStats.hunger - deltaTime * 0.4);
     playerStats.thirst = Math.max(0, playerStats.thirst - deltaTime * 0.6);
     if (playerStats.hunger <= 0 || playerStats.thirst <= 0) takeDamage(deltaTime * 3);
