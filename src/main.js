@@ -327,7 +327,10 @@ document.addEventListener('keydown', (event) => {
 });
 document.addEventListener('mousedown', (event) => {
   if (!pointerLocked) return;
-  if (event.button === 0) { meleeAttack(); placeBuilding(); }
+  if (event.button === 0) {
+    if (selectedBuilding) placeBuilding();
+    else meleeAttack();
+  }
   if (event.button === 2) bowShot();
 });
 
