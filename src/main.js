@@ -720,7 +720,70 @@ function bowShot() {
     console.log('No arrows! Craft some with [C]');
     return;
   }
-  attack('Bow', bowDamage, bowRange, '#5dade2');
+  launchArrow();
+}
+
+// ----- ARROW PROJECTILE -----
+const arrows = [];
+function launchArrow() {
+  if (attackCooldown > 0) return;
+  const arrow = new THREE.Group();
+  const shaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.04, 0.04, 1.2, 6),
+    new THREE.MeshStandardMaterial({ color: '#d2a679', flatShading: true })
+  );
+  shaft.rotation.x = Math.PI / 2;
+  arrow.add(shaft);
+  const head = new THREE.Mesh(
+    new THREE.ConeGeometry(0.08, 0.2, 6),
+    new THREE.MeshStandardMaterial({ color: '#b87333', flatShading: true })
+  );
+  head.position.z = 0.7;
+  arrow.add(head);
+  arrow.position.copy(camera.position);
+  camera.getWorldDirection(arrow.userData.dir = new THREE.Vector3());
+  arrow.lookAt(camera.position.clone().add(arrow.userData.dir));
+  scene.add(arrow);
+  arrows.push(arrow);
+  attackCooldown = attackSpeed * 2;
+}
+
+function updateArrows(deltaTime) {
+  for (let i = arrows.length - 1; i >= 0; i--) {
+    const a = arrows[i];
+    a.position.addScaledVector(a.userData.dir, 40 * deltaTime);
+    a.position.y -= 4 * deltaTime;
+    const g = getTerrainHeight(a.position.x, a.position.z);
+    if (a.position.y < g) {
+      scene.remove(a);
+      arrows.splice(i, 1);
+      continue;
+    }
+    let hitSomething = false;
+    for (const w of wildlife) {
+      if (w.mesh.position.distanceTo(a.position) < 2.5) {
+        const remaining = dealDamage(w, bowDamage);
+        console.log(`Arrow hit ${w.type}, health: ${remaining}/${w.maxHealth}`);
+        showDamageNumber(window.innerWidth / 2, window.innerHeight / 2, bowDamage, '#5dade2');
+        if (remaining <= 0) removeWildlife(w);
+        hitSomething = true;
+        break;
+      }
+    }
+    if (!hitSomething) {
+      for (const r of resources) {
+        if (!r.gathered && r.node.position.distanceTo(a.position) < 3) {
+          dealDamage(r, bowDamage);
+          hitSomething = true;
+          break;
+        }
+      }
+    }
+    if (hitSomething) {
+      scene.remove(a);
+      arrows.splice(i, 1);
+    }
+  }
 }
 
 const wildlife = [];
@@ -747,6 +810,8 @@ function createWildlife(x, z, type) {
 createWildlife(100, 100, 'deer');
 createWildlife(-80, 150, 'boar');
 createWildlife(200, -100, 'wolf');
+createWildlife(190, -90, 'wolf');
+createWildlife(210, -110, 'wolf');
 createWildlife(20, 40, 'chicken');
 createWildlife(-30, 60, 'chicken');
 createWildlife(40, -20, 'chicken');
@@ -807,7 +872,13 @@ function updateWildlifeAI(deltaTime) {
     w.mesh.position.set(w.x, getTerrainHeight(w.x, w.z) + 3, w.z);
 
     // Attack player on contact (aggressive: wolf/boar/bear)
-    const atkDamage = w.type === 'bear' ? 15 : 8;
+    let atkDamage = w.type === 'bear' ? 15 : 8;
+    // Wolf pack behavior: nearby wolves attack together, damage scales with pack size
+    if (w.type === 'wolf') {
+      const packCount = wildlife.filter(w2 => w2.type === 'wolf' && w2 !== w && w2.health > 0 &&
+        Math.sqrt((w2.x - w.x) ** 2 + (w2.z - w.z) ** 2) < 25).length + 1;
+      atkDamage = 6 + packCount * 2;
+    }
     if (aggressive && distance < 5 && playerStats.health > 0) {
       if (!w.attackTimer || (gameTime - w.attackTimer) > 1.5) {
         w.attackTimer = gameTime;
@@ -1196,6 +1267,7 @@ function animate() {
 
   updateAmbientSounds();
   updateWildlifeAI(deltaTime);
+  updateArrows(deltaTime);
   if (attackCooldown > 0) attackCooldown -= deltaTime;
 
   // Stat depletion
