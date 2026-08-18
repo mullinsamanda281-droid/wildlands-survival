@@ -549,12 +549,25 @@ const TOOL_DEFS = {
   stone_pickaxe: { type: 'stone', damage: 2, durability: 40, color: '#6b7b8d', name: 'Stone Pickaxe' },
   spear: { type: 'metal', damage: 12, durability: 30, color: '#c0c0c0', name: 'Spear' }
 };
+const WEAPON_DEFS = {
+  stone_sword: { damage: 18, durability: 50, color: '#b0b0b0', name: 'Stone Sword' },
+  iron_sword: { damage: 28, durability: 65, color: '#c0c0c0', name: 'Iron Sword' },
+  spear: { damage: 14, durability: 30, color: '#c0c0c0', name: 'Spear' }
+};
 
 function equipTool(id) {
   const has = inventory.some(i => i.type === id);
-  if (!has) { console.log(`No ${TOOL_DEFS[id]?.name || id} to equip`); return; }
+  if (!has) { console.log(`No ${TOOL_DEFS[id]?.name || WEAPON_DEFS[id]?.name || id} to equip`); return; }
   equippedTool = equippedTool === id ? null : id;
-  console.log(equippedTool ? `Equipped ${TOOL_DEFS[id].name}` : 'Unequipped tool');
+  console.log(equippedTool ? `Equipped ${TOOL_DEFS[equippedTool]?.name || id}` : 'Unequipped tool');
+}
+
+let equippedWeapon = null;
+function equipWeapon(id) {
+  const has = inventory.some(i => i.type === id);
+  if (!has) { console.log(`No ${WEAPON_DEFS[id]?.name || id} to equip`); return; }
+  equippedWeapon = equippedWeapon === id ? null : id;
+  console.log(equippedWeapon ? `Wielded ${WEAPON_DEFS[id].name}` : 'Sheathed weapon');
 }
 
 function useToolForGather(gatheredType) {
@@ -584,6 +597,8 @@ document.addEventListener('keydown', (event) => {
   if (event.code === 'Key4') equipTool('stone_axe');
   if (event.code === 'Key5') equipTool('stone_pickaxe');
   if (event.code === 'Key6') equipTool('spear');
+  if (event.code === 'Key7') equipWeapon('stone_sword');
+  if (event.code === 'Key8') equipWeapon('iron_sword');
 });
 
 // ----- CRAFTING -----
@@ -598,7 +613,9 @@ const recipes = {
   campfire: { name: 'Campfire', cost: { wood: 3 }, color: '#e67e22' },
   bandage: { name: 'Bandage', cost: { wood: 1 }, color: '#f5f5f5' },
   bone_armor: { name: 'Bone Armor', cost: { bones: 2, leather: 3 }, color: '#d4c4a8' },
-  leather_armor: { name: 'Leather Armor', cost: { leather: 5 }, color: '#8a6d4f' }
+  leather_armor: { name: 'Leather Armor', cost: { leather: 5 }, color: '#8a6d4f' },
+  stone_sword: { name: 'Stone Sword', cost: { wood: 2, stone: 3 }, color: '#b0b0b0' },
+  iron_sword: { name: 'Iron Sword', cost: { metal_bar: 2, wood: 2 }, color: '#c0c0c0' }
 };
 
 const CAMPFIRES = [];
@@ -809,9 +826,31 @@ function attack(button, damage, range, color) {
 }
 
 function meleeAttack() {
-  const damage = equippedTool === 'spear' ? TOOL_DEFS.spear.damage : meleeDamage;
+  let damage = meleeDamage;
+  let wearTool = null;
+  if (equippedWeapon && WEAPON_DEFS[equippedWeapon]) {
+    damage = WEAPON_DEFS[equippedWeapon].damage;
+    wearTool = 'weapon';
+  } else if (equippedTool === 'spear') {
+    damage = TOOL_DEFS.spear.damage;
+    wearTool = 'tool';
+  }
   attack('Melee', damage, 5, '#ff4444');
-  if (equippedTool === 'spear') damageEquippedTool();
+  if (wearTool === 'tool') damageEquippedTool();
+  if (wearTool === 'weapon') damageEquippedWeapon();
+}
+function damageEquippedWeapon() {
+  if (!equippedWeapon) return;
+  const slot = inventory.find(i => i.type === equippedWeapon);
+  if (!slot) { equippedWeapon = null; return; }
+  if (slot.durability === undefined) slot.durability = WEAPON_DEFS[equippedWeapon].durability;
+  slot.durability -= 1;
+  if (slot.durability <= 0) {
+    inventory = inventory.filter(i => i !== slot);
+    equippedWeapon = null;
+    console.log('Weapon broke!');
+  }
+  updateInventoryUI();
 }
 function bowShot() {
   if (removeFromInventory('arrow', 1) === 0) {
@@ -1121,6 +1160,7 @@ function saveGame() {
     stats: { ...playerStats },
     level: { level: playerLevel, xp: playerXp },
     armor: equippedArmor,
+    weapon: equippedWeapon,
     resources: resources.map(r => ({ id: r.id, type: r.type, currentAmount: r.currentAmount, maxAmount: r.maxAmount })),
     buildings: placedBuildings.map(b => ({
       type: b.userData.type, tier: b.userData.tier,
@@ -1162,6 +1202,7 @@ function loadGame() {
     playerXp = gameState.level.xp ?? 0;
   }
   if (gameState.armor && ARMOR_DEFS[gameState.armor]) equippedArmor = gameState.armor;
+  if (gameState.weapon && WEAPON_DEFS[gameState.weapon]) equippedWeapon = gameState.weapon;
   if (gameState.resources) {
     for (const r of resources) {
       const s = gameState.resources.find(rs => rs.id === r.id);
@@ -1226,6 +1267,7 @@ function newGame() {
   playerXp = 0;
   equippedArmor = null;
   equippedTool = null;
+  equippedWeapon = null;
   selectedBuilding = null;
   isPaused = false;
   objectiveIndex = 0;
@@ -1572,11 +1614,15 @@ function animate() {
     gatherPrompt.style.display = (pointerLocked && hit.length > 0) ? 'block' : 'none';
   }
 
-  toolBar.style.display = equippedTool ? 'block' : 'none';
+  toolBar.style.display = equippedTool ? 'block' : (equippedWeapon ? 'block' : 'none');
   if (equippedTool && TOOL_DEFS[equippedTool]) {
     const slot = inventory.find(i => i.type === equippedTool);
     const dur = slot ? (slot.durability ?? TOOL_DEFS[equippedTool].durability) : 0;
     toolBar.textContent = `${TOOL_DEFS[equippedTool].name} [dur ${dur}] [4/5/6 swap]`;
+  } else if (equippedWeapon && WEAPON_DEFS[equippedWeapon]) {
+    const slot = inventory.find(i => i.type === equippedWeapon);
+    const dur = slot ? (slot.durability ?? WEAPON_DEFS[equippedWeapon].durability) : 0;
+    toolBar.textContent = `${WEAPON_DEFS[equippedWeapon].name} [dur ${dur}] [7/8 swap]`;
   }
 
   levelBar.textContent = `LVL ${playerLevel} | XP ${playerXp}/${xpToNext(playerLevel)}`;
