@@ -18,6 +18,29 @@ scene.add(directionalLight);
 const sun = new THREE.Object3D();
 sun.position.set(50, 50, 50);
 scene.add(sun);
+const sunMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(4, 12, 12),
+  new THREE.MeshBasicMaterial({ color: 0xffdd77 })
+);
+sunMesh.position.set(0, 0, 0);
+sun.add(sunMesh);
+const stars = new THREE.Points(
+  new THREE.BufferGeometry(),
+  new THREE.PointsMaterial({ color: 0xffffff, size: 0.4, transparent: true, opacity: 1 })
+);
+{
+  const starCount = 800;
+  const positions = new Float32Array(starCount * 3);
+  for (let i = 0; i < starCount; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    positions[i * 3] = 400 * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = 400 * Math.cos(phi);
+    positions[i * 3 + 2] = 400 * Math.sin(phi) * Math.sin(theta);
+  }
+  stars.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+}
+scene.add(stars);
 const fog = new THREE.Fog(0x87ceeb, 10, 200);
 scene.fog = fog;
 const skyColor = new THREE.Color(0x87ceeb);
@@ -1396,21 +1419,18 @@ function animate() {
   gameTime += deltaTime;
   sun.position.x = 50 * Math.cos(gameTime * 0.2);
   sun.position.z = 50 * Math.sin(gameTime * 0.2);
-  sun.position.y = 50 * Math.sin(gameTime * 0.15);
+  sun.position.y = 30 * Math.sin(gameTime * 0.2);
   directionalLight.position.copy(sun.position);
   const dayProgress = ((gameTime * 0.2) % (2 * Math.PI)) / (2 * Math.PI);
-  const isDay = dayProgress > 0.2 && dayProgress < 0.8;
-  if (isDay) {
-    skyColor.setRGB(0.5 + 0.5 * Math.sin(gameTime * 2), 0.7 + 0.3 * Math.sin(gameTime * 2 - 1), 1.0);
-    directionalLight.intensity = 0.8;
-    ambientLight.intensity = 0.6;
-  } else {
-    skyColor.setRGB(0.02, 0.02, 0.08);
-    directionalLight.intensity = 0.1;
-    ambientLight.intensity = 0.25;
-  }
+  const isDay = dayProgress > 0.15 && dayProgress < 0.85;
+  const dayFactor = isDay ? 1 : 0.18;
+  skyColor.setRGB(0.53 * dayFactor + 0.05, 0.72 * dayFactor + 0.03, 0.95 * dayFactor + 0.06);
+  directionalLight.intensity = isDay ? 0.8 : 0.1;
+  ambientLight.intensity = isDay ? 0.6 : 0.25;
   fog.color.copy(skyColor);
   renderer.setClearColor(skyColor);
+  sunMesh.visible = isDay;
+  stars.material.opacity = isDay ? 0 : 1;
 
   for (const r of resources) {
     if (r.gathered && r.currentAmount < r.maxAmount) {
