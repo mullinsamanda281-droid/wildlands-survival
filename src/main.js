@@ -745,7 +745,7 @@ if (typeof window !== 'undefined' && window.__TEST__) {
     getLevel: () => ({ level: playerLevel, xp: playerXp }),
     resetInventory: () => { inventory = []; },
     isPlayerDead: () => playerStats.health <= 0,
-    resetPlayerHealth: () => { playerStats.health = 100; }
+    resetPlayerHealth: () => { playerStats.health = 100; playerStats.hunger = 100; playerStats.thirst = 100; equippedArmor = null; }
   };
 }
 renderCrafting();
