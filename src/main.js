@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 
+const qualitySetting = 'medium'; // low / medium / high
 const canvas = document.querySelector('#three-canvas');
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -12,16 +13,29 @@ const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
 directionalLight.position.set(50, 100, 50);
-directionalLight.castShadow = qualitySetting !== "low";
+directionalLight.castShadow = qualitySetting !== 'low';
 scene.add(directionalLight);
 const sun = new THREE.Object3D();
 sun.position.set(50, 50, 50);
 scene.add(sun);
 const fog = new THREE.Fog(0x87ceeb, 10, 200);
 scene.fog = fog;
-const qualitySetting = 'medium'; // low / medium / high
-directionalLight.castShadow = qualitySetting !== 'low';
 const skyColor = new THREE.Color(0x87ceeb);
+let currentQuality = qualitySetting;
+
+// ----- QUALITY SETTINGS -----
+function applyQuality(level) {
+  currentQuality = level;
+  const high = level === 'high';
+  const medium = level === 'medium' || high;
+  directionalLight.castShadow = medium;
+  fog.near = level === 'low' ? 10 : 10;
+  fog.far = level === 'low' ? 120 : 200;
+  renderer.setPixelRatio(high ? Math.min(window.devicePixelRatio, 2) : 1);
+  renderer.shadowMap.enabled = medium;
+  console.log(`Quality: ${level}`);
+}
+applyQuality(qualitySetting);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -1065,6 +1079,10 @@ document.addEventListener('keydown', (event) => {
   if (event.code === 'KeyV' && pointerLocked) useBandage();
   if (event.code === 'KeyU' && pointerLocked) upgradeFacingBuilding();
   if (event.code === 'KeyJ' && pointerLocked) equipArmor();
+  if (event.code === 'KeyO') {
+    const order = ['low', 'medium', 'high'];
+    applyQuality(order[(order.indexOf(currentQuality) + 1) % order.length]);
+  }
 });
 
 function useBandage() {
