@@ -569,10 +569,6 @@ function useToolForGather(gatheredType) {
   if (tool.type === gatheredType) {
     for (let i = 0; i < tool.damage - 1; i++) addToInventory(gatheredType, 1);
   }
-  const slot = inventory.find(i => i.type === equippedTool);
-  if (slot) {
-    slot.count = (slot.count || 0) + 1; // treat as durability when stacked? No - use dedicated field
-  }
   damageEquippedTool();
 }
 
