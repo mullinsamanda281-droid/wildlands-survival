@@ -296,37 +296,40 @@ function createResources(count, type) {
     let mesh, amount;
     if (type === 'wood') {
       const t = treeTypes[Math.floor(Math.random() * treeTypes.length)];
+      const groundY = getTerrainHeight(x, z);
       const trunk = new THREE.Mesh(
         new THREE.CylinderGeometry(1, 2, t.height, 8, 1, true),
         new THREE.MeshStandardMaterial({ color: t.color, flatShading: true })
       );
-      trunk.position.set(x, t.height / 2, z);
+      trunk.position.set(x, groundY + t.height / 2, z);
       trunk.castShadow = true;
       scene.add(trunk);
       const leaves = new THREE.Mesh(
         new THREE.SphereGeometry(t.height * 0.6, 12, 12),
         new THREE.MeshBasicMaterial({ color: 0x228b22, transparent: true, opacity: 0.8 })
       );
-      leaves.position.set(x, t.height + 2, z);
+      leaves.position.set(x, groundY + t.height + 2, z);
       scene.add(leaves);
       mesh = trunk; amount = 10;
     } else if (type === 'stone') {
       const r = rockTypes[0];
+      const groundY = getTerrainHeight(x, z);
       mesh = new THREE.Mesh(
         new THREE.IcosahedronGeometry(r.size, 0),
         new THREE.MeshStandardMaterial({ color: r.color, flatShading: true })
       );
-      mesh.position.set(x, r.size, z);
+      mesh.position.set(x, groundY + r.size, z);
       mesh.castShadow = true;
       scene.add(mesh);
       amount = 5;
     } else {
       const o = oreTypes[Math.floor(Math.random() * oreTypes.length)];
+      const groundY = getTerrainHeight(x, z);
       mesh = new THREE.Mesh(
         new THREE.SphereGeometry(o.size, 12, 12),
         new THREE.MeshStandardMaterial({ color: o.color, flatShading: true })
       );
-      mesh.position.set(x, o.size, z);
+      mesh.position.set(x, groundY + o.size, z);
       mesh.castShadow = true;
       scene.add(mesh);
       amount = 3;
@@ -344,18 +347,19 @@ function createBerryBushes() {
     const distance = 30 + Math.random() * 120;
     const x = Math.cos(angle) * distance;
     const z = Math.sin(angle) * distance;
+    const groundY = getTerrainHeight(x, z);
     const bush = new THREE.Mesh(
       new THREE.SphereGeometry(2, 8, 8),
       new THREE.MeshStandardMaterial({ color: '#4d7c2e', flatShading: true })
     );
-    bush.position.set(x, 2, z);
+    bush.position.set(x, groundY + 2, z);
     bush.castShadow = true;
     scene.add(bush);
     const berries = new THREE.Mesh(
       new THREE.SphereGeometry(0.5, 6, 6),
       new THREE.MeshBasicMaterial({ color: '#c0392b' })
     );
-    berries.position.set(x + 1, 3, z);
+    berries.position.set(x + 1, groundY + 3, z);
     scene.add(berries);
     resources.push({
       id: `berry_${i}`, type: 'berries', maxAmount: 5, currentAmount: 5,
@@ -815,7 +819,7 @@ function createWildlife(x, z, type) {
     new THREE.SphereGeometry(sizes[type], 12, 12),
     new THREE.MeshStandardMaterial({ color: colors[type], flatShading: true })
   );
-  mesh.position.set(x, sizes[type], z);
+  mesh.position.set(x, getTerrainHeight(x, z) + sizes[type], z);
   mesh.castShadow = true;
   scene.add(mesh);
   const entity = {
