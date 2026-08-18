@@ -503,7 +503,9 @@ const recipes = {
   spear: { name: 'Spear', cost: { wood: 3, metal: 1 }, color: '#c0c0c0' },
   arrow: { name: 'Arrow', cost: { wood: 1, stone: 1 }, color: '#d2a679' },
   campfire: { name: 'Campfire', cost: { wood: 3 }, color: '#e67e22' },
-  bandage: { name: 'Bandage', cost: { wood: 1 }, color: '#f5f5f5' }
+  bandage: { name: 'Bandage', cost: { wood: 1 }, color: '#f5f5f5' },
+  bone_armor: { name: 'Bone Armor', cost: { bones: 2, leather: 3 }, color: '#d4c4a8' },
+  leather_armor: { name: 'Leather Armor', cost: { leather: 5 }, color: '#8a6d4f' }
 };
 
 const CAMPFIRES = [];
@@ -737,23 +739,15 @@ createWildlife(40, -20, 'chicken');
 createWildlife(0, -150, 'bear');
 createWildlife(-200, 30, 'bear');
 
-createWildlife(-80, 150, 'boar');
-createWildlife(200, -100, 'wolf');
-createWildlife(20, 40, 'chicken');
-createWildlife(-30, 60, 'chicken');
-createWildlife(40, -20, 'chicken');
-createWildlife(0, -150, 'bear');
-createWildlife(-200, 30, 'bear');
-
 function removeWildlife(w) {
   const idx = wildlife.indexOf(w);
   if (idx > -1) {
     scene.remove(w.mesh);
     wildlife.splice(idx, 1);
     const loot = {
-      deer: { wood: 2, meat: 2 }, boar: { metal: 1, meat: 2 },
-      wolf: { metal: 2, meat: 1 }, chicken: { meat: 1 },
-      bear: { metal: 3, meat: 3 }
+      deer: { wood: 2, meat: 2, leather: 2 }, boar: { metal: 1, meat: 2, leather: 1 },
+      wolf: { metal: 2, meat: 1, leather: 1, bones: 1 }, chicken: { meat: 1 },
+      bear: { metal: 3, meat: 3, leather: 3, bones: 2 }
     }[w.type] || { wood: 1 };
     for (const [type, count] of Object.entries(loot)) addToInventory(type, count);
     addXp(15);
@@ -903,6 +897,7 @@ function saveGame() {
     timeOfDay: gameTime,
     stats: { ...playerStats },
     level: { level: playerLevel, xp: playerXp },
+    armor: equippedArmor,
     resources: resources.map(r => ({ id: r.id, type: r.type, currentAmount: r.currentAmount, maxAmount: r.maxAmount }))
   };
   localStorage.setItem('wildlands_save', JSON.stringify(gameState));
@@ -938,6 +933,7 @@ function loadGame() {
     playerLevel = gameState.level.level ?? 1;
     playerXp = gameState.level.xp ?? 0;
   }
+  if (gameState.armor && ARMOR_DEFS[gameState.armor]) equippedArmor = gameState.armor;
   if (gameState.resources) {
     for (const r of resources) {
       const s = gameState.resources.find(rs => rs.id === r.id);
@@ -979,6 +975,10 @@ const levelBar = document.createElement('div');
 levelBar.style.cssText = 'position:absolute;bottom:140px;left:50%;transform:translateX(-50%);color:#ffd700;font-family:monospace;font-size:13px;text-shadow:1px 1px 2px #000;z-index:1002;';
 hud.appendChild(levelBar);
 
+const armorBar = document.createElement('div');
+armorBar.style.cssText = 'position:absolute;bottom:158px;left:50%;transform:translateX(-50%);color:#d4c4a8;font-family:monospace;font-size:13px;text-shadow:1px 1px 2px #000;z-index:1002;';
+hud.appendChild(armorBar);
+
 let gameTime = 0;
 let lastFrameTime = performance.now();
 let fpsFrames = 0;
@@ -989,11 +989,35 @@ let fpsVisible = false;
 // Player stats
 const playerStats = { health: 100, hunger: 100, thirst: 100, stamina: 100 };
 const FOOD_ITEMS = { plank: 0, stone_block: 0, metal_bar: 0, stone_axe: 0, wood: 0, stone: 0, metal: 0, berries: 20, meat: 15, cooked_meat: 40 };
+let equippedArmor = null;
+const ARMOR_DEFS = {
+  bone_armor: { name: 'Bone Armor', damageReduction: 0.25 },
+  leather_armor: { name: 'Leather Armor', damageReduction: 0.15 }
+};
 
 function takeDamage(amount) {
+  if (equippedArmor && ARMOR_DEFS[equippedArmor]) {
+    amount = Math.round(amount * (1 - ARMOR_DEFS[equippedArmor].damageReduction));
+  }
   playerStats.health = Math.max(0, playerStats.health - amount);
   updateStatsUI();
   if (playerStats.health <= 0) showDeathScreen();
+}
+
+function equipArmor() {
+  const countOf = (t) => inventory.filter(i => i.type === t).reduce((s, i) => s + i.count, 0);
+  const priority = ['bone_armor', 'leather_armor'];
+  let chosen = null;
+  for (const t of priority) {
+    if (countOf(t) > 0) { chosen = t; break; }
+  }
+  if (chosen) {
+    equippedArmor = chosen;
+    removeFromInventory(chosen, 1);
+    console.log(`Equipped ${ARMOR_DEFS[chosen].name} (${Math.round(ARMOR_DEFS[chosen].damageReduction * 100)}% damage reduction)`);
+  } else {
+    console.log('No armor to equip. Craft Bone Armor [C] from bones + leather.');
+  }
 }
 
 function eatFood(type) {
@@ -1040,6 +1064,7 @@ document.addEventListener('keydown', (event) => {
   if (event.code === 'KeyT' && pointerLocked) cookAtCampfire();
   if (event.code === 'KeyV' && pointerLocked) useBandage();
   if (event.code === 'KeyU' && pointerLocked) upgradeFacingBuilding();
+  if (event.code === 'KeyJ' && pointerLocked) equipArmor();
 });
 
 function useBandage() {
@@ -1213,6 +1238,7 @@ function animate() {
   }
 
   levelBar.textContent = `LVL ${playerLevel} | XP ${playerXp}/${xpToNext(playerLevel)}`;
+  armorBar.textContent = equippedArmor ? `${ARMOR_DEFS[equippedArmor].name} [${Math.round(ARMOR_DEFS[equippedArmor].damageReduction * 100)}% DR]` : 'No armor [J to equip]';
 
   renderer.render(scene, camera);
 }
