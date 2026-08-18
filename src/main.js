@@ -1011,6 +1011,40 @@ const BUILDING_TIERS = [
   { name: 'metal', color: '#5dade2', cost: { metal: 2 } }
 ];
 
+// ----- BUILD PREVIEW GHOST -----
+let buildGhost = null;
+function createBuildGhost() {
+  if (buildGhost) return;
+  const mat = new THREE.MeshBasicMaterial({ color: 0x88ff88, transparent: true, opacity: 0.35, depthWrite: false });
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  buildGhost = new THREE.Mesh(geo, mat);
+  scene.add(buildGhost);
+}
+
+function updateBuildGhost() {
+  if (!selectedBuilding) {
+    if (buildGhost) buildGhost.visible = false;
+    return;
+  }
+  if (!buildGhost) createBuildGhost();
+  const def = buildingTypes[selectedBuilding];
+  buildGhost.visible = pointerLocked;
+  if (pointerLocked) {
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    const hitY = getTerrainHeight(camera.position.x, camera.position.z);
+    const distance = selectedBuilding === 'wall' ? 6 : 10;
+    const gx = camera.position.x + dir.x * distance;
+    const gz = camera.position.z + dir.z * distance;
+    buildGhost.position.set(
+      Math.round(gx / def.size) * def.size,
+      getTerrainHeight(Math.round(gx / def.size) * def.size, Math.round(gz / def.size) * def.size) + 1,
+      Math.round(gz / def.size) * def.size
+    );
+    buildGhost.scale.set(def.size, def.size, def.size);
+  }
+}
+
 function placeBuilding() {
   if (!selectedBuilding || attackCooldown > 0) return;
   const def = buildingTypes[selectedBuilding];
@@ -1195,6 +1229,7 @@ function newGame() {
   selectedBuilding = null;
   isPaused = false;
   objectiveIndex = 0;
+  if (buildGhost) { scene.remove(buildGhost); buildGhost = null; }
   for (const b of placedBuildings) scene.remove(b);
   placedBuildings.length = 0;
   for (const c of campfireMeshes) scene.remove(c);
@@ -1548,6 +1583,7 @@ function animate() {
   armorBar.textContent = equippedArmor ? `${ARMOR_DEFS[equippedArmor].name} [${Math.round(ARMOR_DEFS[equippedArmor].damageReduction * 100)}% DR]` : 'No armor [J to equip]';
   ammoBar.textContent = `Arrows: ${totalInventory('arrow')} in flight: ${arrows.length}`;
   crosshair.style.display = pointerLocked ? 'block' : 'none';
+  updateBuildGhost();
 
   renderer.render(scene, camera);
 }
