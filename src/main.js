@@ -715,7 +715,7 @@ renderCrafting();
 let attackCooldown = 0;
 const attackSpeed = 0.5;
 const meleeDamage = 10;
-const bowDamage = 5;
+const bowDamage = 8;
 const bowRange = 10;
 
 function dealDamage(target, damage) {
@@ -723,6 +723,10 @@ function dealDamage(target, damage) {
   if (target.currentAmount !== undefined) {
     target.currentAmount = Math.max(0, target.currentAmount - damage);
     return target.currentAmount;
+  }
+  if (target.health !== undefined) {
+    target.health = Math.max(0, target.health - damage);
+    return target.health;
   }
   if (target.userData && target.userData.health !== undefined) {
     target.userData.health = Math.max(0, target.userData.health - damage);
@@ -734,7 +738,7 @@ function dealDamage(target, damage) {
 function showDamageNumber(x, y, number, color) {
   const dmgText = document.createElement('div');
   dmgText.style.cssText = `position:absolute;left:${x}px;top:${y}px;color:${color || '#ff4444'};font-size:14px;font-family:Arial,sans-serif;text-shadow:1px 1px 2px #000;pointer-events:none;z-index:1002;`;
-  dmgText.innerText = '+' + number;
+  dmgText.innerText = '-' + number;
   hud.appendChild(dmgText);
   setTimeout(() => { if (dmgText.parentNode) hud.removeChild(dmgText); }, 500);
 }
@@ -855,7 +859,7 @@ function createWildlife(x, z, type) {
   const sizes = { deer: 4, boar: 6, wolf: 5, chicken: 1.5, bear: 8 };
   const speeds = { deer: 1.5, boar: 1.0, wolf: 2.0, chicken: 2.5, bear: 0.8 };
   const colors = { deer: '#6b4c4c', boar: '#8b4513', wolf: '#2c5f2d', chicken: '#f4e0c5', bear: '#5b3a1e' };
-  const healths = { deer: 3, boar: 4, wolf: 3, chicken: 1, bear: 8 };
+  const healths = { deer: 15, boar: 25, wolf: 20, chicken: 5, bear: 60 };
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(sizes[type], 12, 12),
     new THREE.MeshStandardMaterial({ color: colors[type], flatShading: true })
