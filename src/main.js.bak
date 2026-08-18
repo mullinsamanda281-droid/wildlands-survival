@@ -1,0 +1,1111 @@
+import * as THREE from 'three';
+
+// ----- BASIC THREE.js SETUP -----
+const canvas = document.querySelector('#three-canvas');
+if (!canvas) { console.error('Canvas #three-canvas not found'); const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000); const renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight); const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8); directionalLight.position.set(50, 100, 50); directionalLight.castShadow = true; scene.add(directionalLight); const sun = new THREE.Object3D(); sun.position.set(50, 50, 50); scene.add(sun); const fog = new THREE.Fog(0x87ceeb, 10, 200); scene.fog = fog; }
+
+// Scene
+const scene = new THREE.Scene();
+
+// Camera - perspective for first-person
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 1.6, 0);
+
+// Renderer
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+
+// Light - ambient so we can see everything (low-poly style)
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+
+// Directional light - sun
+const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+directionalLight.position.set(50, 100, 50);
+directionalLight.castShadow = true;
+scene.add(directionalLight);
+
+// Sun helper for day/night cycle
+const sun = new THREE.Object3D();
+sun.position.set(50, 50, 50);
+scene.add(sun);
+
+// Fog for day/night atmosphere
+const fog = new THREE.Fog(0x87ceeb, 10, 200);
+scene.fog = fog;
+
+// Pointer lock state
+let pointerLocked = false;
+
+// ----- AUDIO SYSTEM -----
+let audioContext = null;
+let footstepGain = null;
+let lastFootstepTime = 0;
+const footstepCooldown = 200; // ms between footsteps
+
+
+function initAudio() {
+  try {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    footstepGain = audioContext.createGain();
+    footstepGain.gain.value = 0.5;
+    footstepGain.connect(audioContext.destination);
+  } catch (e) {
+    console.error('Web Audio API not supported', e);
+  }
+}
+
+// ----- EXPORT -----
+  windSound.loop = true;
+  windSound.volume = 0.1;
+
+function updateAmbientSounds() {
+  const dayProgress = (gameTime % 2000) / 2000;
+  const isDay = dayProgress > 0.2 && dayProgress < 0.8;
+
+  if (isDay) {
+    oceanSound.volume = 0.05;
+    windSound.volume = 0.1;
+  } else {
+    oceanSound.volume = 0.1;
+    windSound.volume = 0.05;
+  }
+
+if (!oceanSound.paused) oceanSound.volume = Math.min(oceanSound.volume, 0.5);
+  if (!windSound.paused) windSound.volume = Math.min(windSound.volume, 0.5);
+
+  oceanSound.currentTime = 0;
+  windSound.currentTime = 0;
+}
+  grass: { color: '#228b22', lowpassFreq: 800, gain: 0.5 },
+  dirt: { color: '#8b4513', lowpassFreq: 600, gain: 0.6 },
+  rock: { color: '#b87333', lowpassFreq: 400, gain: 0.4 },
+  sand: { color: '#f4e0c5', lowpassFreq: 700, gain: 0.5 },
+  wood: { color: '#8b4513', lowpassFreq: 500, gain: 0.5 },
+  metal: { color: '#b87333', lowpassFreq: 300, gain: 0.3 },
+  default: { lowpassFreq: 700, gain: 0.5 }
+};
+
+// Ambient sound elements
+let oceanSound = null;
+let windSound = null;
+const oceanUrl = 'data:audio/wav;base64,UklGRiQAAABXRVMBAAAAABAAEAQDABAAZGF0YZ8aK5R0dHaAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+const windUrl = 'data:audio/wav;base64,UklGRiQAAABXRVMBAAAAABAAEAqdABAAZGF0YZ8aK5x0dHaAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+// Material colors for footstep sound filtering
+const materialPresets = {
+  grass: { color: #228b22, lowpassFreq: 800, gain: 0.5 },
+  dirt: { color: #8b4513, lowpassFreq: 600, gain: 0.6 },
+  rock: { color: #b87333, lowpassFreq: 400, gain: 0.4 },
+  sand: { color: #f4e0c5, lowpassFreq: 700, gain: 0.5 },
+  wood: { color: #8b4513, lowpassFreq: 500, gain: 0.5 },
+  metal: { color: #b87333, lowpassFreq: 300, gain: 0.3 },
+  default: { lowpassFreq: 700, gain: 0.5 }
+}
+
+function createFootstepOscillator(freq, gainValue, duration) {
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+  oscillator.type = 'sine';
+  oscillator.frequency.value = freq;
+  gainNode.gain.value = gainValue;
+  oscillator.connect(gainNode);
+  gainNode.connect(footstepGain);
+
+  // Short decay
+  const now = audioContext.currentTime;
+  gainNode.gain.setValueAtTime(gainValue, now);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+  oscillator.start(now);
+  oscillator.stop(now + duration);
+}
+
+function playFootstep(materialType) {
+  if (!audioContext || !footstepGain) return;
+  const now = audioContext.currentTime;
+  if (now - lastFootstepTime < footstepCooldown / 1000) return;
+  lastFootstepTime = now * 1000;
+
+  const preset = materialPresets[materialType] || materialPresets.default;
+  const baseFreq = 200 + Math.random() * 100;
+  const freq = baseFreq * (0.8 + Math.random() * 0.4);
+
+  // Create a short noise burst for more natural footstep
+  const bufferSize = audioContext.sampleRate * 0.1;
+  const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+  const noise = audioContext.createBufferSource();
+  noise.buffer = buffer;
+  noise.connect(footstepGain);
+  noise.start(now);
+  noise.stop(now + 0.1);
+
+  // Also add a tonal component
+  createFootstepOscillator(freq, preset.gain * 0.3, 0.2);
+}
+
+// Terrain material detection under player feet
+function getFootstepMaterial(x, z) {
+  const positions = terrainGeometry.attributes.position.array;
+  if (!positions) return 'default';
+  const gridSize = 50;
+  const vertexX = Math.round((x + terrainSize / 2) / (terrainSize / gridSize)) % gridSize;
+  const vertexZ = Math.round((z + terrainSize / 2) / (terrainSize / gridSize)) % gridSize;
+  const idx = (vertexZ * gridSize + vertexX) * 3;
+  if (idx >= 0 && idx + 2 < positions.length) {
+    const y = positions[idx + 1];
+    // Determine material based on height relative to terrain avg
+    // Simple heuristic: lower areas = grass, higher = rock/sand
+    if (y > 10) return 'rock';
+    if (y > 5) return 'dirt';
+    return 'grass';
+  }
+  return 'default';
+}
+
+// Footstep trigger on each animation frame when moving
+let lastPlayerY = playerY;
+
+function checkFootstep() {
+  if (!pointerLocked || !audioContext) return;
+  const moveSpeed = isSprinting ? SPRINT_MULTIPLIER * SPEED : SPEED;
+  const hasMoved = Math.abs(camera.position.x - lastPlayerY) > 0.1 || Math.abs(camera.position.z - lastPlayerY) > 0.1;
+  // Simplified: check if player moved significantly this frame
+  if (hasMoved) {
+    const material = getFootstepMaterial(camera.position.x, camera.position.z);
+    playFootstep(material);
+  }
+  lastPlayerY = camera.position.y;
+}
+
+// ----- AMBIENT SOUND SYSTEM -----
+let ambientOscillator = null;
+let windOscillator = null;
+let ambientPlaying = false;
+let windPlaying = false;
+let lastWindChange = 0;
+
+function initAmbientSounds() {
+  if (!audioContext) return;
+  
+  // Ocean ambience - low periodic waveform
+  if (!ambientOscillator) {
+    const oceanNode = audioContext.createOscillator();
+    const oceanGain = audioContext.createGain();
+    oceanNode.frequency.value = 0.2;
+    oceanNode.type = 'triangle';
+    oceanGain.gain.value = 0.1;
+    oceanNode.connect(oceanGain);
+    oceanGain.connect(footstepGain);
+    oceanNode.start();
+    ambientOscillator = oceanGain;
+  }
+  
+  // Wind - noise burst with lowpass filter
+  if (!windOscillator) {
+    const windNode = audioContext.createBufferSource();
+    const bufferSize = audioContext.sampleRate * 0.5;
+    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    windNode.buffer = buffer;
+    windNode.loop = true;
+    const windGain = audioContext.createGain();
+    windGain.gain.value = 0.05;
+    // Lowpass filter for windy sound
+    const lastTime = audioContext.currentTime;
+    windGain.gain.setValueAtTime(0.05, lastTime);
+    windGain.gain.exponentialRampToValueAtTime(0.001, lastTime + 10);
+    windNode.connect(windGain);
+    windGain.connect(footstepGain);
+    windNode.start();
+    windOscillator = windGain;
+  }
+}
+
+function updateAmbientSounds() {
+  if (!audioContext) return;
+  const now = audioContext.currentTime;
+  
+  // Ocean pitch varies slowly with time of day
+  if (ambientOscillator) {
+    const dayProgress = (gameTime * 0.001) % (2 * Math.PI);
+    const isDay = dayProgress > 0.2 && dayProgress < 0.8;
+    const baseFreq = isDay ? 0.15 : 0.08;
+    ambientOscillator.frequency.value = baseFreq + Math.random() * 0.02;
+  }
+  
+  // Wind changes periodically
+  if (windOscillator && now - lastWindChange > 3) {
+    if (windOscillator.context) {
+      windOscillator.gain.gain.value = 0.02 + Math.random() * 0.03;
+    }
+    lastWindChange = now;
+  }
+}
+
+document.body.addEventListener('click', () => {
+  if (!pointerLocked) {
+    canvas.requestPointerLock();
+    initAmbientSounds();
+  }
+});
+
+document.addEventListener('pointerlockchange', () => {
+  pointerLocked = document.pointerLockElement === canvas;
+});
+
+document.addEventListener('pointerlockerror', (err) => {
+  console.error('Pointer lock error:', err.message);
+});
+
+const moveDirection = new THREE.Vector3();
+const velocity = new THREE.Vector3(0, 0, 0);
+const SPEED = 0.2;
+const SPRINT_MULTIPLIER = 1.5;
+let isSprinting = false;
+
+const onKeyDown = (event) => {
+  switch (event.code) {
+    case 'KeyW': moveDirection.z -= 1; break;
+    case 'KeyS': moveDirection.z += 1; break;
+    case 'KeyA': moveDirection.x -= 1; break;
+    case 'KeyD': moveDirection.x += 1; break;
+    case 'ShiftLeft': isSprinting = true; break;
+    case 'Space': 
+      if (canJump) { velocity.y = 0.4; canJump = false; }
+      break;
+    case 'KeyE': gatherResource(); break;
+  }
+};
+
+const onKeyUp = (event) => {
+  switch (event.code) {
+    case 'KeyW': moveDirection.z += Math.abs(moveDirection.z); break;
+    case 'KeyS': moveDirection.z -= Math.abs(moveDirection.z); break;
+    case 'KeyA': moveDirection.x += Math.abs(moveDirection.x); break;
+    case 'KeyD': moveDirection.x -= Math.abs(moveDirection.x); break;
+    case 'ShiftLeft': isSprinting = false; break;
+  }
+};
+
+document.addEventListener('keydown', onKeyDown);
+document.addEventListener('keyup', onKeyUp);
+
+// Mouse look
+const rotation = new THREE.Euler();
+let mouseSensitivity = 0.002;
+
+document.addEventListener('mousemove', (event) => {
+  if (!pointerLocked) return;
+  rotation.y -= event.movementX * mouseSensitivity;
+  rotation.x -= event.movementY * mouseSensitivity;
+  rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotation.x));
+});
+
+// Jump state
+let canJump = true;
+
+// ----- RESOURCE SYSTEM -----
+const resources = [];
+const MAX_RESOURCES = 200;
+
+const treeTypes = [
+  { name: 'oak', color: '#8b4513', height: 20 },
+  { name: 'pine', color: '#2c5f2d', height: 18 },
+  { name: 'birch', color: '#e0e0e0', height: 15 },
+];
+
+const rockTypes = [
+  { name: 'rock', color: '#b87333', size: 8 },
+];
+
+const oreTypes = [
+  { name: 'copper', color: '#b87333', size: 5 },
+  { name: 'iron', color: '#da825a', size: 5 },
+  { name: 'silver', color: '#c0c0c0', size: 5 },
+];
+
+// ----- TERRAIN -----
+const terrainSize = 500;
+const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 50, 50);
+terrainGeometry.rotateX(-Math.PI / 2);
+
+const terrainVertices = terrainGeometry.attributes.position.array;
+for (let i = 0; i < terrainVertices.length; i += 3) {
+  terrainVertices[i + 1] = terrainVertices[i + 1] + (Math.random() - 0.5) * 20;
+}
+
+const terrainMaterial = new THREE.MeshStandardMaterial({ color: '#8b5a2b', flatShading: true });
+const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+terrain.receiveShadow = true;
+scene.add(terrain);
+
+const groundHelper = new THREE.Mesh(
+  new THREE.PlaneGeometry(20, 20),
+  new THREE.MeshBasicMaterial({ color: 0x00ff00, opacity: 0.1, transparent: true })
+);
+groundHelper.position.y = 0.001;
+groundHelper.rotateX(-Math.PI / 2);
+scene.add(groundHelper);
+
+// ----- RESOURCE CREATION -----
+function createTrees() {
+  const treeCount = 50;
+  for (let i = 0; i < treeCount; i++) {
+    const treeData = treeTypes[Math.floor(Math.random() * treeTypes.length)];
+    const angle = (Math.random() * Math.PI * 2);
+    const distance = 80 + Math.random() * 200;
+    const x = Math.cos(angle) * distance;
+    const z = Math.sin(angle) * distance;
+    
+    const trunkGeometry = new THREE.CylinderGeometry(1, 2, treeData.height, 8, 1, true);
+    const trunk = new THREE.Mesh(trunkGeometry, new THREE.MeshStandardMaterial({ color: treeData.color, flatShading: true }));
+    trunk.position.set(x, treeData.height / 2, z);
+    trunk.castShadow = true;
+    scene.add(trunk);
+    
+    const leafGeometry = new THREE.SphereGeometry(treeData.height * 0.6, 12, 12);
+    const leaves = new THREE.Mesh(leafGeometry, new THREE.MeshBasicMaterial({ color: 0x228b22, transparent: true, opacity: 0.8 }));
+    leaves.position.set(x, treeData.height + 2, z);
+    scene.add(leaves);
+    
+    resources.push({
+      id: `tree_${i}`, type: 'wood', maxAmount: 10, currentAmount: 10,
+      position: { x, z }, node: trunk, gathered: false,
+    });
+  }
+}
+
+function createRocks() {
+  const rockCount = 30;
+  for (let i = 0; i < rockCount; i++) {
+    const rockData = rockTypes[Math.floor(Math.random() * rockTypes.length)];
+    const angle = (Math.random() * Math.PI * 2);
+    const distance = 100 + Math.random() * 250;
+    const x = Math.cos(angle) * distance;
+    const z = Math.sin(angle) * distance;
+    
+    const rockGeometry = new THREE.IcosahedronGeometry(rockData.size, 0);
+    const rock = new THREE.Mesh(rockGeometry, new THREE.MeshStandardMaterial({ color: rockData.color, flatShading: true }));
+    rock.position.set(x, rockData.size, z);
+    rock.castShadow = true;
+    scene.add(rock);
+    
+    resources.push({
+      id: `rock_${i}`, type: 'stone', maxAmount: 5, currentAmount: 5,
+      position: { x, z }, node: rock, gathered: false,
+    });
+  }
+}
+
+function createOres() {
+  const oreCount = 20;
+  for (let i = 0; i < oreCount; i++) {
+    const oreData = oreTypes[Math.floor(Math.random() * oreTypes.length)];
+    const angle = (Math.random() * Math.PI * 2);
+    const distance = 120 + Math.random() * 300;
+    const x = Math.cos(angle) * distance;
+    const z = Math.sin(angle) * distance;
+    
+    const oreGeometry = new THREE.SphereGeometry(oreData.size, 12, 12);
+    const oreMesh = new THREE.Mesh(oreGeometry, new THREE.MeshStandardMaterial({ color: oreData.color, flatShading: true }));
+    oreMesh.position.set(x, oreData.size, z);
+    oreMesh.castShadow = true;
+    scene.add(oreMesh);
+    
+    resources.push({
+      id: `ore_${i}`, type: 'metal', maxAmount: 3, currentAmount: 3,
+      position: { x, z }, node: oreMesh, gathered: false,
+    });
+  }
+}
+
+createTrees();
+createRocks();
+createOres();
+
+// ----- GATHERING SYSTEM -----
+let canGather = true;
+let lastGatherTime = 0;
+const gatherCooldown = 500;
+
+function gatherResource() {
+  if (!pointerLocked || !canGather) return;
+  const now = Date.now();
+  if (now - lastGatherTime < gatherCooldown) return;
+  
+  const raycaster = new THREE.Raycaster();
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  raycaster.set(camera.position, dir);
+  raycaster.far = 5;
+  
+  const intersects = raycaster.intersectObjects(resources.filter(r => !r.gathered), true);
+  
+  if (intersects.length > 0) {
+    let resourceData = null;
+    for (const r of resources) {
+      if (r.node === intersects[0].object || (r.node && r.node.parent === intersects[0].object)) {
+        resourceData = r;
+        break;
+      }
+    }
+    
+    if (resourceData && resourceData.currentAmount > 0) {
+      resourceData.currentAmount--;
+      console.log(`Gathered ${resourceData.type}, remaining: ${resourceData.currentAmount}/${resourceData.maxAmount}`);
+      
+      intersected.scale.set(1.1, 1.1, 1.1);
+      setTimeout(() => { intersected.scale.set(1, 1, 1); }, 50);
+      
+      lastGatherTime = now;
+      
+      if (resourceData.currentAmount <= 0) {
+        resourceData.gathered = true;
+        setTimeout(() => {
+          const idx = resources.indexOf(resourceData);
+          if (idx > -1) resources.splice(idx, 1);
+        }, 1000);
+      }
+    }
+  }
+}
+
+// ----- PLAYER POSITION & PHYSICS -----
+const groundLevel = 0;
+let playerX = 0, playerZ = 0, playerY = 1.6;
+const gravity = -0.005;
+
+function getTerrainHeight(x, z) {
+  const positions = terrainGeometry.attributes.position.array;
+  if (!positions) return groundLevel;
+  const gridSize = 50;
+  const vertexX = Math.round((x + terrainSize / 2) / (terrainSize / gridSize)) % gridSize;
+  const vertexZ = Math.round((z + terrainSize / 2) / (terrainSize / gridSize)) % gridSize;
+  const idx = (vertexZ * gridSize + vertexX) * 3;
+  if (idx >= 0 && idx + 2 < positions.length) return positions[idx + 1];
+  return groundLevel;
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ----- RENDER LOOP -----
+let frame = 0, gameTime = 0;
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (pointerLocked) {
+    camera.rotation.y = rotation.y;
+    camera.rotation.x = rotation.x;
+    
+    const moveSpeed = isSprinting ? SPRINT_MULTIPLIER * SPEED : SPEED;
+    const angle = camera.rotation.y;
+    const forwardX = Math.sin(angle), forwardZ = Math.cos(angle);
+    const rightX = Math.sin(angle + Math.PI / 2), rightZ = Math.cos(angle + Math.PI / 2);
+    
+    if (moveDirection.z !== 0 || moveDirection.x !== 0) {
+      velocity.x = (forwardX * moveDirection.z + rightX * moveDirection.x) * moveSpeed;
+      velocity.z = (forwardZ * moveDirection.z + rightZ * moveDirection.x) * moveSpeed;
+    } else {
+      velocity.x *= 0.95;
+      velocity.z *= 0.95;
+    }
+    
+    velocity.y += gravity;
+    const targetY = playerY + velocity.y;
+    const terrainHeight = getTerrainHeight(camera.position.x, camera.position.z);
+    
+    if (targetY < terrainHeight + 2.0) {
+      velocity.y = terrainHeight + 2.0 - playerY;
+      canJump = true;
+    }
+    
+    playerY += velocity.y;
+    camera.position.y = playerY;
+    camera.position.x += velocity.x;
+    camera.position.z += velocity.z;
+    
+    const minX = -terrainSize / 2 + 20, maxX = terrainSize / 2 - 20;
+    const minZ = -terrainSize / 2 + 20, maxZ = terrainSize / 2 - 20;
+    if (camera.position.x < minX) camera.position.x = minX;
+    if (camera.position.x > maxX) camera.position.x = maxX;
+    if (camera.position.z < minZ) camera.position.z = minZ;
+    if (camera.position.z > maxZ) camera.position.z = maxZ;
+  }
+
+  // Footstep sound effect
+  if (pointerLocked) {
+    const moveSpeed = isSprinting ? SPRINT_MULTIPLIER * SPEED : SPEED;
+    const hasMoved = moveSpeed > 0.05;
+    if (hasMoved) {
+      const material = getFootstepMaterial(camera.position.x, camera.position.z);
+      playFootstep(material);
+    }
+  }
+
+  updateAmbientSounds();
+
+  // FPS counter calculation
+  fpsFrames++;
+  if (gameTime - fpsTime > 1000) {
+    fps = fpsFrames;
+    fpsFrames = 0;
+    fpsTime = gameTime;
+    if (fpsToggle) {
+      fpsToggle.textContent = `${fps} FPS`;
+      fpsToggle.style.display = pointerLocked ? 'block' : 'none';
+    }
+  }
+
+  gameTime++;
+  const timeProgress = gameTime * 0.001;
+  sun.position.x = 50 * Math.cos(timeProgress * 0.2);
+  sun.position.z = 50 * Math.sin(timeProgress * 0.2);
+  sun.position.y = 50 * Math.sin(timeProgress * 0.15);
+  
+  const dayProgress = (timeProgress % (2 * Math.PI)) / (2 * Math.PI);
+  const isDay = dayProgress > 0.2 && dayProgress < 0.8;
+  
+  if (isDay) {
+    skyColor.setRGB(0.5 + 0.5 * Math.sin(timeProgress * 2), 0.7 + 0.3 * Math.sin(timeProgress * 2 - 1), 1.0);
+    fog.density = 0.02;
+  } else {
+    skyColor.setRGB(0.02, 0.02, 0.08);
+    fog.density = 0.05;
+  }
+  
+  renderer.setClearColor(skyColor);
+
+  // Resource respawning
+  resources.forEach(r => {
+    if (r.gathered && r.currentAmount < r.maxAmount) {
+      r.currentAmount = Math.min(r.maxAmount, r.currentAmount + 0.01);
+    }
+  });
+
+  // ----- GATHERING PROMPT LOGIC -----
+  const raycaster = new THREE.Raycaster();
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  raycaster.set(camera.position, dir);
+  raycaster.far = 5;
+  
+  const gatherable = resources.filter(r => !r.gathered && r.currentAmount > 0);
+  const intersects = raycaster.intersectObjects(gatherable, true);
+  if (intersects.length > 0) {
+    gatherPrompt.style.display = 'block';
+  } else {
+    gatherPrompt.style.display = 'none';
+  }
+
+  // Reduce attack cooldown each frame
+  if (attackCooldown > 0) {
+    attackCooldown -= 1 / 60;
+  }
+  
+  renderer.render(scene, camera);
+}
+
+const skyColor = new THREE.Color(0x87ceeb);
+animate();
+
+// ----- UI ELEMENTS -----
+const hud = document.createElement('div');
+hud.style.position = 'absolute';
+hud.style.top = '0';
+hud.style.left = '0';
+hud.style.width = '100%';
+hud.style.height = '100%';
+hud.style.pointerEvents = 'none';
+hud.style.fontFamily = 'Arial, sans-serif';
+hud.style.color = '#ffffff';
+hud.style.zIndex = '1000';
+
+const crosshair = document.createElement('div');
+crosshair.style.position = 'absolute';
+crosshair.style.width = '40px'; crosshair.style.height = '40px';
+crosshair.style.top = '50%'; crosshair.style.left = '50%';
+crosshair.style.margin = '-20px 0 0 -20px';
+crosshair.style.border = '2px solid #fff'; crosshair.style.borderRadius = '4px';
+crosshair.style.background = 'rgba(255,255,255,0.1)';
+crosshair.innerHTML = '<span style="position:absolute;left:50%;top:50%;width:20px;height:2px;background:#fff;margin:-1px 0 0 -10px;"></span><span style="position:absolute;left:50%;top:50%;width:2px;height:20px;background:#fff;margin:-10px 0 0 -1px;"></span>';
+hud.appendChild(crosshair);
+
+const gatherPrompt = document.createElement('div');
+gatherPrompt.style.position = 'absolute';
+gatherPrompt.style.bottom = '80px';
+gatherPrompt.style.left = '50%';
+gatherPrompt.style.transform = 'translateX(-50%)';
+gatherPrompt.style.fontSize = '14px';
+gatherPrompt.style.color = '#e8c54a';
+gatherPrompt.style.textShadow = '1px 1px 2px #000';
+gatherPrompt.style.background = 'rgba(0,0,0,0.6)';
+gatherPrompt.style.padding = '8px 16px';
+gatherPrompt.style.borderRadius = '4px';
+gatherPrompt.style.letterSpacing = '1px';
+gatherPrompt.style.whiteSpace = 'nowrap';
+gatherPrompt.style.display = 'none';
+gatherPrompt.innerHTML = 'Press <kbd>[E]</kbd> to gather';
+hud.appendChild(gatherPrompt);
+
+const hudPanel = document.createElement('div');
+hudPanel.style.position = 'absolute';
+hudPanel.style.top = '20px'; hudPanel.style.left = '20px';
+hudPanel.style.width = '300px';
+hudPanel.style.background = 'rgba(0,0,0,0.5)';
+hudPanel.style.padding = '15px';
+hudPanel.style.borderRadius = '8px';
+hudPanel.style.zIndex = '1001';
+<hudPanel.innerHTML = `
+  <div style="font-size: 20px; font-weight: bold; margin-bottom: 10px; text-shadow: 1px 1px 2px #000;">WILDLANDS SURVIVAL</div>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+    <div><div style="font-size: 12px; opacity: 0.7; margin-bottom: 2px;">HEALTH</div><div style="width: 100px; height: 10px; background: #333; border-radius: 4px; overflow: hidden;"><div style="height: 100%; width: 100%; background: #ff4444; transition: width 0.1s linear;"></div></div></div>
+    <div><div style="font-size: 12px; opacity: 0.7; margin-bottom: 2px;">HUNGER</div><div style="width: 100px; height: 10px; background: #333; border-radius: 4px; overflow: hidden;"><div style="height: 100%; width: 70%; background: #ffd700; transition: width 0.1s linear;" id="hunger-bar"></div></div></div>
+  </div>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+    <div><div style="font-size: 12px; opacity: 0.7; margin-bottom: 2px;">THIRST</div><div style="width: 100px; height: 10px; background: #333; border-radius: 4px; overflow: hidden;"><div style="height: 100%; width: 60%; background: #5dade2; transition: width 0.1s linear;" id="thirst-bar"></div></div></div>
+    <div><div style="font-size: 12px; opacity: 0.7;">STAMINA</div><div style="width: 100px; height: 10px; background: #333; border-radius: 4px; overflow: hidden;"><div style="height: 100%; width: 80%; background: #4ade80; transition: width 0.1s linear;"></div></div></div>
+  </div>
+  <div style="margin-top: 10px; font-size: 10px; opacity: 0.6;">[WASD] Move | [SHFT] Sprint | [SPACE] Jump | [E] Gather | [I] Inventory | [F3] FPS</div>
+  <div style="position: absolute; right: 10px; top: 10px; color: #0f0; font-family: monospace; font-size: 12px; display: none;" id="fps-counter">60 FPS</div>
+`;
+hud.appendChild(hudPanel);
+
+// Inventory panel
+const inventoryPanel = document.createElement('div');
+inventoryPanel.id = 'inventory-panel';
+inventoryPanel.style.position = 'absolute';
+inventoryPanel.style.top = '20px'; inventoryPanel.style.left = '20px';
+inventoryPanel.style.right = '20px';
+inventoryPanel.style.background = '#2a2a3a';
+inventoryPanel.style.padding = '20px';
+inventoryPanel.style.borderRadius = '8px';
+inventoryPanel.style.maxHeight = '400px';
+inventoryPanel.style.overflow = 'auto';
+inventoryPanel.style.display = 'none';
+inventoryPanel.innerHTML = `
+  <div style="font-size: 18px; font-weight: bold; margin-bottom: 15px;">INVENTORY</div>
+  <div style="display: grid; grid-template-columns: repeat(9, 1fr); gap: 8px; margin-bottom: 15px;">
+    ${Array(9).fill().map((_, i) => `<div class="slot" style="background: #3a3a4a; height: 40px; display: flex; justify-content: center; align-items: center; color: #fff; font-size: 12px;" data-slot="${i}"></div>`).join('')}
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(9, 1fr); gap: 8px;">
+    ${Array(9).fill().map((_, i) => `<div class="slot" style="background: #3a3a4a; height: 40px; display: flex; justify-content: center; align-items: center; color: #fff; font-size: 12px;" data-slot="${i}"></div>`).join('')}
+  </div>
+`;
+hud.appendChild(inventoryPanel);
+
+// TAB to toggle inventory
+document.addEventListener('keydown', (event) => {
+  if (event.code === 'Tab') {
+    inventoryPanel.style.display = inventoryPanel.style.display === 'none' ? 'block' : 'none';
+  }
+});
+
+// ----- COMBAT SYSTEM -----
+let isAttacking = false;
+let attackCooldown = 0;
+const attackSpeed = 0.5; // seconds
+const meleeDamage = 10;
+const bowDamage = 5;
+const bowRange = 10;
+
+function dealDamage(target, damage) {
+  if (!target) return 0;
+  if (target.currentAmount !== undefined) {
+    // Resource - reduce amount
+    target.currentAmount = Math.max(0, target.currentAmount - damage);
+    return target.currentAmount;
+  }
+  if (target.userData && target.userData.health !== undefined) {
+    // Entity - reduce health
+    target.userData.health = Math.max(0, target.userData.health - damage);
+    return target.userData.health;
+  }
+  return 0;
+}
+
+function showDamageNumber(x, y, number, color) {
+  const dmgText = document.createElement('div');
+  dmgText.style.position = 'absolute';
+  dmgText.style.left = x + 'px';
+  dmgText.style.top = y + 'px';
+  dmgText.style.color = color || '#ff4444';
+  dmgText.style.fontSize = '14px';
+  dmgText.style.fontFamily = 'Arial, sans-serif';
+  dmgText.style.textShadow = '1px 1px 2px #000';
+  dmgText.style.pointerEvents = 'none';
+  dmgText.style.zIndex = '1002';
+  dmgText.innerText = '+' + number;
+  hud.appendChild(dmgText);
+  // Remove after 0.5s
+  setTimeout(() => { if (dmgText.parentNode) hud.removeChild(dmgText); }, 500);
+}
+
+function meleeAttack() {
+  if (isAttacking || attackCooldown > 0) return;
+  isAttacking = true;
+  
+  // Raycast from camera direction
+  const raycaster = new THREE.Raycaster();
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  raycaster.set(camera.position, dir);
+  raycaster.far = 5;
+  
+  const intersects = raycaster.intersectObjects(resources.filter(r => !r.gathered), true);
+  
+  if (intersects.length > 0) {
+    // Deal damage to the first resource hit
+    const target = intersects[0].object;
+    for (const r of resources) {
+      if (r.node === target || (r.node && r.node.parent === target)) {
+        const remaining = dealDamage(r, meleeDamage);
+        console.log(`Melee hit ${r.type}, remaining: ${remaining}/${r.maxAmount}`);
+        // Show damage number at cursor position
+        const cursorX = (intersects[0].screenX / 2) + 0.5; // normalized to screen
+        const cursorY = (-intersects[0].screenY / 2) + 0.5;
+        const screenX = cursorX * window.innerWidth;
+        const screenY = cursorY * window.innerHeight;
+        showDamageNumber(screenX, screenY, meleeDamage, '#ff4444');
+        break;
+      }
+    }
+  }
+  
+  attackCooldown = attackSpeed;
+  isAttacking = false;
+}
+
+function bowShot() {
+  if (isAttacking || attackCooldown > 0) return;
+  isAttacking = true;
+  
+  // Raycast from camera direction
+  const raycaster = new THREE.Raycaster();
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  raycaster.set(camera.position, dir);
+  raycaster.far = bowRange;
+  
+  const intersects = raycaster.intersectObjects(resources.filter(r => !r.gathered), true);
+  
+  if (intersects.length > 0) {
+    // Deal damage to the first resource hit
+    const target = intersects[0].object;
+    for (const r of resources) {
+      if (r.node === target || (r.node && r.node.parent === target)) {
+        const remaining = dealDamage(r, bowDamage);
+        console.log(`Bow hit ${r.type}, remaining: ${remaining}/${r.maxAmount}`);
+        // Show damage number at cursor position
+        const cursorX = (intersects[0].screenX / 2) + 0.5;
+        const cursorY = (-intersects[0].screenY / 2) + 0.5;
+        const screenX = cursorX * window.innerWidth;
+        const screenY = cursorY * window.innerHeight;
+        showDamageNumber(screenX, screenY, bowDamage, '#5dade2');
+        break;
+      }
+    }
+  }
+  
+  attackCooldown = attackSpeed * 2; // Bow has longer cooldown
+  isAttacking = false;
+}
+
+document.addEventListener('mousedown', (event) => {
+  if (!pointerLocked) return;
+  if (event.button === 0) {
+    // Left mouse - melee attack
+    meleeAttack();
+  }
+  if (event.button === 2) {
+    // Right mouse - bow shot
+    bowShot();
+  }
+});
+
+// Quality setting
+const qualitySetting = 'medium';
+directionalLight.castShadow = qualitySetting !== 'low';
+
+// FPS counter
+let fps = 0;
+let fpsFrames = 0;
+let fpsTime = 0;
+const fpsToggle = document.getElementById('fps-counter');
+
+// ----- EXPORT -----
+export { scene, camera, renderer, ambientLight, directionalLight, sun, fog };
+export { terrain, groundHelper, resources };
+export { moveDirection, velocity, rotation, pointerLocked, isSprinting, canJump, canGather, gatherResource };
+export { getTerrainHeight, qualitySetting };
+// ----- WILDLIFE AI SYSTEM -----
+// Simple distance-based AI for wildlife entities
+const wildlife = [];
+
+function createWildlife(x, z, type) {
+  const sizes = { deer: 4, boar: 6, wolf: 5 };
+  const speed = { deer: 1.5, boar: 1.0, wolf: 2.0 };
+  
+  const geometry = new THREE.SphereGeometry(sizes[type], 12, 12);
+  const materials = { deer: new THREE.MeshStandardMaterial({ color: '#6b4c4c', flatShading: true }),
+                     boar: new THREE.MeshStandardMaterial({ color: '#8b4513', flatShading: true }),
+                     wolf: new THREE.MeshStandardMaterial({ color: '#2c5f2d', flatShading: true }) };
+  
+  const mesh = new THREE.Mesh(geometry, materials[type]);
+  mesh.position.set(x, sizes[type], z);
+  mesh.castShadow = true;
+  mesh.userData = { type, health: 3, maxHealth: 3, speed: speed[type] };
+  scene.add(mesh);
+  
+  wildlife.push({
+    mesh,
+    type,
+    position: { x, z },
+    targetX: x, targetZ: z,
+    state: 'idle',
+    timer: 0,
+    wanderRadius: 30
+  });
+}
+
+// Initialize wildlife
+createWildlife(100, 100, 'deer');
+createWildlife(-80, 150, 'boar');
+createWildlife(200, -100, 'wolf');
+
+// Simple AI update - called within the render loop
+function updateWildlifeAI(deltaTime) {
+  if (!pointerLocked) return;
+  
+  const playerPos = { x: camera.position.x, z: camera.position.z };
+  
+  wildlife.forEach(entity => {
+    const distX = Math.abs(entity.position.x - playerPos.x);
+    const distZ = Math.abs(entity.position.z - playerPos.z);
+    const distance = Math.sqrt(distX * distX + distZ * distZ);
+    
+    // State transitions based on distance
+    if (distance < 30) {
+      // Too close - flee
+      entity.state = 'fleeing';
+    } else if (distance < 100) {
+      // Notice player - chase
+      entity.state = 'chasing';
+      // Move toward player
+      entity.targetX = playerPos.x;
+      entity.targetZ = playerPos.z;
+    } else {
+      // Wander or idle
+      entity.state = 'wandering';
+      
+      // Wander timer
+      entity.timer += deltaTime;
+      if (entity.timer > 2) {
+        entity.timer = 0;
+        // Random new wander point
+        const angle = Math.random() * Math.PI * 2;
+        entity.targetX = entity.position.x + Math.cos(angle) * entity.wanderRadius;
+        entity.targetZ = entity.position.z + Math.sin(angle) * entity.wanderRadius;
+      }
+    }
+    
+    // Move toward target
+    const target = entity.targetX;
+    const dx = entity.position.x < target ? entity.userData.speed * deltaTime : 
+               entity.position.x > target ? -entity.userData.speed * deltaTime : 0;
+    entity.position.x += dx;
+    
+    const dz = entity.position.z < target ? entity.userData.speed * deltaTime :
+               entity.position.z > target ? -entity.userData.speed * deltaTime : 0;
+    entity.position.z += dz;
+    
+    // Update mesh position
+    entity.mesh.position.set(entity.position.x, entity.userData.maxHealth, entity.position.z);
+    
+    // Reset if far away (performance)
+    if (distance > 200) {
+      entity.position.x = entity.mesh.position.x = 100 + Math.random() * 200;
+      entity.position.z = entity.mesh.position.z = 100 + Math.random() * 200;
+    }
+  });
+}
+
+// ----- BUILDING SYSTEM -----
+let selectedBuilding = null;
+const GRID_SIZE = 10;
+let placementValid = true;
+
+const buildingTypes = {
+  foundation: { size: 20, resourceCost: { wood: 5 } },
+  wall: { size: 2, resourceCost: { wood: 3 } },
+  floor: { size: 20, resourceCost: { wood: 10 } }
+};
+
+function canAffordResources(cost) {
+  // Simple check - always return true for now
+  return true;
+}
+
+function placeBuilding(type) {
+  if (!canAffordResources(buildingTypes[type].resourceCost)) {
+    console.log("Not enough resources");
+    return;
+  }
+  console.log("Placing " + type);
+  // Create the actual building mesh
+  const geometry = new THREE.BoxGeometry(buildingTypes[type].size, 2, buildingTypes[type].size);
+  const material = new THREE.MeshStandardMaterial({ color: '#8b5a2b', flatShading: true });
+  const building = new THREE.Mesh(geometry, material);
+  building.position.set(camera.position.x, 1, camera.position.z);
+  building.castShadow = true;
+  scene.add(building);
+}
+
+// Hotkey bindings for building selection
+document.addEventListener('keydown', (event) => {
+  if (event.code === 'Key1') selectedBuilding = 'foundation';
+  if (event.code === 'Key2') selectedBuilding = 'wall';
+  if (event.code === 'Key3') selectedBuilding = 'floor';
+});
+// ----- SAVE/LOAD SYSTEM -----
+const SAVE_VERSION = 1;
+
+function saveGame() {
+  const gameState = {
+    version: SAVE_VERSION,
+    seed: Math.floor(Math.random() * 100000), // Generate seed or store existing
+    playerPosition: {
+      x: camera.position.x,
+      y: camera.position.y,
+      z: camera.position.z
+    },
+    inventory: inventory.map(item => ({ ...item })),
+    stats: {
+      health: 100,
+      hunger: 100,
+      thirst: 100,
+      stamina: 100
+    },
+    structures: [], // Would contain placed building data
+    timeOfDay: gameTime * 0.001,
+    resources: resources.map(r => ({
+      id: r.id,
+      type: r.type,
+      currentAmount: r.currentAmount,
+      maxAmount: r.maxAmount
+    }))
+  };
+  
+  localStorage.setItem('wildlands_save', JSON.stringify(gameState));
+  console.log('Game saved');
+}
+
+function loadGame() {
+  const saved = localStorage.getItem('wildlands_save');
+  if (!saved) {
+    console.log('No save file found');
+    return false;
+  }
+  
+  const gameState = JSON.parse(saved);
+  
+  if (gameState.version !== SAVE_VERSION) {
+    console.log('Save version mismatch');
+    return false;
+  }
+  
+  // Restore player position
+  if (gameState.playerPosition) {
+    camera.position.set(
+      gameState.playerPosition.x,
+      gameState.playerPosition.y,
+      gameState.playerPosition.z
+    );
+    playerY = gameState.playerPosition.y;
+  }
+  
+  // Restore inventory
+  if (gameState.inventory) {
+    inventory = gameState.inventory.map(item => ({
+      id: item.id,
+      type: item.type,
+      count: item.count || 1
+    }));
+    updateInventoryUI();
+  }
+  
+  // Restore stats
+  if (gameState.stats) {
+    // Update HUD bars
+    const hungerPercent = gameState.stats.hunger / 100;
+    const thirstPercent = gameState.stats.thirst / 100;
+    if (document.getElementById('hunger-bar')) {
+      document.getElementById('hunger-bar').style.width = `${hungerPercent * 100}%`;
+    }
+    if (document.getElementById('thirst-bar')) {
+      document.getElementById('thirst-bar').style.width = `${thirstPercent * 100}%`;
+    }
+  }
+  
+  console.log('Game loaded');
+  return true;
+}
+
+function newGame() {
+  // Clear save and restart
+  localStorage.removeItem('wildlands_save');
+  // Reset player to starting position
+  camera.position.set(0, 1.6, 0);
+  playerY = 1.6;
+  console.log('New game started');
+}
+
+// Hotkey F2 to save, F3 to toggle FPS counter
+document.addEventListener('keydown', (event) => {
+  if (event.code === 'F2') saveGame();
+  if (event.code === 'F3') {
+    if (fpsToggle) {
+      fpsToggle.style.display = fpsToggle.style.display === 'none' ? 'block' : 'none';
+    }
+  }
+  if (event.code === 'Escape') closeInventory();
+});
+
+// Update inventory UI from saved state
+function updateInventoryUI() {
+  const slots = document.querySelectorAll('#inventory-panel .slot');
+  inventory.forEach((item, index) => {
+    if (index < slots.length) {
+      if (item.type) {
+        slots[index].innerText = item.type.substring(0, 4).toUpperCase();
+        slots[index].style.background = getItemColor(item.type);
+      } else {
+        slots[index].innerText = '';
+        slots[index].style.background = '#3a3a4a';
+      }
+    }
+  });
+}
+
+// Helper: get color for resource type
+function getItemColor(type) {
+  const colors = {
+    wood: '#8b4513',
+    stone: '#b87333',
+    metal: '#b87333'
+  };
+  return colors[type] || '#3a3a4a';
+}
