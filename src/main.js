@@ -693,62 +693,25 @@ function createWildlife(x, z, type) {
     new THREE.MeshStandardMaterial({ color: colors[type], flatShading: true })
   );
   mesh.position.set(x, sizes[type], z);
-  wildlife.forEach(w => {
-    const dx = w.x - px, dz = w.z - pz;
-    const distance = Math.sqrt(dx * dx + dz * dz);
-    let tx = w.x, tz = w.z;
-    if (distance < 30) {
-      w.state = 'fleeing';
-      tx = w.x + (dx / (distance + 0.001)) * 20;
-      tz = w.z + (dz / (distance + 0.001)) * 20;
-    } else if (distance < 100) {
-      w.state = 'chasing';
-      tx = px; tz = pz;
-    } else {
-      w.state = 'wandering';
-      w.timer += deltaTime;
-      if (w.timer > 2) {
-        w.timer = 0;
-        const angle = Math.random() * Math.PI * 2;
-        tx = w.x + Math.cos(angle) * w.wanderRadius;
-        tz = w.z + Math.sin(angle) * w.wanderRadius;
-      }
-    }
-    const step = w.speed * deltaTime;
-    w.x += Math.max(-step, Math.min(step, tx - w.x));
-    w.z += Math.max(-step, Math.min(step, tz - w.z));
-    w.mesh.position.set(w.x, getTerrainHeight(w.x, w.z) + 3, w.z);
+  mesh.castShadow = true;
+  scene.add(mesh);
+  const entity = {
+    mesh, type, x, z,
+    health: healths[type], maxHealth: healths[type], speed: speeds[type],
+    state: 'wandering', timer: 0, wanderRadius: 30
+  };
+  wildlife.push(entity);
+  return entity;
+}
+createWildlife(100, 100, 'deer');
+createWildlife(-80, 150, 'boar');
+createWildlife(200, -100, 'wolf');
+createWildlife(20, 40, 'chicken');
+createWildlife(-30, 60, 'chicken');
+createWildlife(40, -20, 'chicken');
+createWildlife(0, -150, 'bear');
+createWildlife(-200, 30, 'bear');
 
-    // Attack player on contact (wolves/boars aggressive)
-    const aggressive = w.type === 'wolf' || w.type === 'boar';
-    const packAttackRange = 10;
-    
-    // Wolf pack behavior: count nearby wolves and coordinate attacks
-    if (aggressive && distance < packAttackRange && playerStats.health > 0) {
-      // Count wolves in pack
-      const packWolves = wildlife.filter(w2 => w2.type === 'wolf' && w2 !== w && 
-        Math.sqrt(Math.pow(w2.x - px, 2) + Math.pow(w2.z - pz, 2)) < packAttackRange);
-      const packSize = packWolves.length + 1; // +1 for current wolf
-      
-      // Pack attack: all wolves attack together when pack size >= 2
-      if (packSize >= 2) {
-        // Pack attack timer - each wolf attacks independently but simultaneously
-        if (!w.packAttackTimer || (gameTime - w.packAttackTimer) > 2) {
-          w.packAttackTimer = gameTime;
-          // Deal damage based on pack size (more wolves = more damage)
-          const packDamage = 8 * Math.min(packSize, 3);
-          takeDamage(packDamage);
-          showDamageNumber(window.innerWidth / 2, window.innerHeight / 2, packDamage, '#ff4444');
-        }
-      } else {
-        // Single wolf attack (original behavior)
-        if (!w.attackTimer || (gameTime - w.attackTimer) > 1.5) {
-          w.attackTimer = gameTime;
-          takeDamage(8);
-          showDamageNumber(window.innerWidth / 2, window.innerHeight / 2, 8, '#ff4444');
-        }
-      }
-    }
 createWildlife(-80, 150, 'boar');
 createWildlife(200, -100, 'wolf');
 createWildlife(20, 40, 'chicken');
